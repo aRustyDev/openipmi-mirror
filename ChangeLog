@@ -4,6 +4,10 @@
 
 	* sample/sample3.c, sample/Makefile.am: Added another sample file.
 
+	* lib/oem_atca.c: Modify the address control numbers to just be
+	assigned sequentially; you cannot use the IPMB address since
+	multiple functions may be at the same IPMB.
+
 	* configure.in: Move to version 1.3.10
 
 2004-09-01 Corey Minyard <cminyard@mvista.com> 
