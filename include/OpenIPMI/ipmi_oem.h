@@ -73,17 +73,6 @@ int ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
 				       ipmi_mc_oem_new_sensor_cb handler,
 				       void                      *cb_data);
 
-/* Used to report a new entity to the OEM handler.  The OEM handler
-   may not refuse to allow the entity to be added, but it can fetch
-   information from the entity and modify it. */
-typedef void (*ipmi_domain_oem_new_entity_cb)(ipmi_domain_t *domain,
-					      ipmi_entity_t *ent,
-					      void          *cb_data);
-int ipmi_domain_set_oem_new_entity_handler(
-    ipmi_domain_t                 *domain,
-    ipmi_domain_oem_new_entity_cb handler,
-    void                          *cb_data);
-
 /* Used to report a new mc to the OEM handler.  The OEM handler
    may not refuse to allow the mc to be added, but it can fetch
    information from the mc and modify it. */
@@ -99,9 +88,9 @@ int ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
    so the OEM handler can free data if necessary.  This is registered
    against the MC itself, not the BMC, and must be called on each MC
    that needs it. */
-typedef void (*ipmi_mc_oem_removed_cb)(ipmi_mc_t *bmc,
-				       ipmi_mc_t *mc,
-				       void      *cb_data);
+typedef void (*ipmi_mc_oem_removed_cb)(ipmi_domain_t *domain,
+				       ipmi_mc_t     *mc,
+				       void          *cb_data);
 int ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
 				    ipmi_mc_oem_removed_cb handler,
 				    void                   *cb_data);

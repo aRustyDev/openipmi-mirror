@@ -412,8 +412,6 @@ entity_add(ipmi_entity_info_t *ents,
 
     ent->entity_id_string = ipmi_get_entity_id_string(entity_id);
 
-    ipmi_domain_oem_new_entity(ents->domain, ent);
-
     if (!ilist_add_tail(ents->entities, ent, NULL)) {
 	free_ilist(ent->controls);
 	free_ilist(ent->sensors);

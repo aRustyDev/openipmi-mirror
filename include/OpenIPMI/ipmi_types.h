@@ -106,7 +106,9 @@ struct ipmi_entity_id_s
 typedef struct ipmi_mcid_s
 {
     ipmi_domain_id_t domain_id;
-    unsigned int     mc_num;
+    unsigned char    mc_num;
+    unsigned char    channel;
+    long             seq;
 } ipmi_mcid_t;
 
 typedef struct ipmi_mc_s ipmi_mc_t;
@@ -130,7 +132,7 @@ struct ipmi_control_id_s
 /* An entry from the system event log. */
 typedef struct ipmi_event_s
 {
-    ipmi_mcid_t   mcid; /* The MC this event came from. */
+    ipmi_mcid_t   mcid; /* The MC this event is stored in. */
 
     unsigned int  record_id;
     unsigned int  type;

@@ -115,6 +115,7 @@ typedef struct lan_wait_queue_s
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    void                  *data4;
 
     struct lan_wait_queue_s *next;
 } lan_wait_queue_t;
@@ -166,6 +167,7 @@ typedef struct lan_data_s
 	void                  *rsp_data;
 	void                  *data2;
 	void                  *data3;
+	void                  *data4;
 	os_hnd_timer_id_t     *timer;
 	lan_timer_info_t      *timer_info;
 	unsigned int          retries;
@@ -202,9 +204,6 @@ typedef struct lan_data_s
 
     lan_report_con_failure_cb lan_con_fail_handler;
     void                      *lan_con_fail_cb_data;
-
-    ipmi_ll_init_con_done_cb start_con_handler;
-    void                     *start_con_cb_data;
 
     struct lan_data_s *next, *prev;
 } lan_data_t;
@@ -591,7 +590,7 @@ audit_timeout_handler(void              *cb_data,
     si.lun = 0;
     ipmi->send_command(ipmi,
 		       (ipmi_addr_t *) &si, sizeof(si),
-		       &msg, NULL, NULL, NULL, NULL);
+		       &msg, NULL, NULL, NULL, NULL, NULL);
 
     timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
     timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
@@ -697,6 +696,7 @@ rsp_timeout_handler(void              *cb_data,
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    void                  *data4;
     int                   ip_num;
 
     ipmi_read_lock();
@@ -792,6 +792,7 @@ rsp_timeout_handler(void              *cb_data,
     rsp_data = lan->seq_table[seq].rsp_data;
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
+    data4 = lan->seq_table[seq].data4;
 
     lan->seq_table[seq].inuse = 0;
 
@@ -799,7 +800,7 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_unlock(lan->seq_num_lock);
 
     if (handler)
-	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3, data4);
     goto out_unlock2;
 
  out_unlock:
@@ -842,7 +843,8 @@ handle_msg_send(lan_timer_info_t      *info,
 		ipmi_ll_rsp_handler_t rsp_handler,
 		void                  *rsp_data,
 		void                  *data2,
-		void                  *data3)
+		void                  *data3,
+		void                  *data4)
 
 {
     ipmi_con_t     *ipmi = info->ipmi;
@@ -869,6 +871,7 @@ handle_msg_send(lan_timer_info_t      *info,
     lan->seq_table[seq].rsp_data = rsp_data;
     lan->seq_table[seq].data2 = data2;
     lan->seq_table[seq].data3 = data3;
+    lan->seq_table[seq].data4 = data4;
     memcpy(&(lan->seq_table[seq].addr), addr, addr_len);
     lan->seq_table[seq].addr_len = addr_len;
     lan->seq_table[seq].msg = *msg;
@@ -926,7 +929,8 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 
 	rv = handle_msg_send(q_item->info, &q_item->addr, q_item->addr_len,
 			     &(q_item->msg), q_item->rsp_handler,
-			     q_item->rsp_data, q_item->data2, q_item->data3);
+			     q_item->rsp_data, q_item->data2,
+			     q_item->data3, q_item->data4);
 	if (rv) {
 	    /* Send an error response to the user. */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -938,7 +942,8 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	    if (q_item->rsp_handler)
 		q_item->rsp_handler(ipmi, &q_item->addr, q_item->addr_len,
 				    &q_item->msg, q_item->rsp_data,
-				    q_item->data2, q_item->data3);
+				    q_item->data2, q_item->data3,
+				    q_item->data4);
 	    if (! q_item->info->cancelled) {
 		ipmi->os_hnd->free_timer(ipmi->os_hnd, q_item->info->timer);
 		ipmi_mem_free(q_item->info);
@@ -981,6 +986,7 @@ data_handler(int            fd,
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    void                  *data4;
 
     ipmi_read_lock();
 
@@ -1212,13 +1218,14 @@ data_handler(int            fd,
     rsp_data = lan->seq_table[seq].rsp_data;
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
+    data4 = lan->seq_table[seq].data4;
     lan->seq_table[seq].inuse = 0;
 
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
 
     if (handler)
-	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3, data4);
     
  out_unlock2:
     ipmi_read_unlock();
@@ -1236,7 +1243,8 @@ lan_send_command(ipmi_con_t            *ipmi,
 		 ipmi_ll_rsp_handler_t rsp_handler,
 		 void                  *rsp_data,
 		 void                  *data2,
-		 void                  *data3)
+		 void                  *data3,
+		 void                  *data4)
 {
     lan_timer_info_t *info;
     lan_data_t       *lan;
@@ -1287,6 +1295,7 @@ lan_send_command(ipmi_con_t            *ipmi,
 	q_item->rsp_data = rsp_data;
 	q_item->data2 = data2;
 	q_item->data3 = data3;
+	q_item->data4 = data4;
 
 	/* Add it to the end of the queue. */
 	q_item->next = NULL;
@@ -1301,7 +1310,7 @@ lan_send_command(ipmi_con_t            *ipmi,
     }
 
     rv = handle_msg_send(info, addr, addr_len, msg, rsp_handler, rsp_data,
-			 data2, data3);
+			 data2, data3, data4);
     if (rv) {
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
     }
@@ -1456,6 +1465,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	    void                  *rsp_data;
 	    void                  *data2;
 	    void                  *data3;
+	    void                  *data4;
 	    lan_timer_info_t      *info;
 	    unsigned char         data[0];
 	    ipmi_msg_t            msg;
@@ -1470,6 +1480,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	    rsp_data = lan->seq_table[i].rsp_data;
 	    data2 = lan->seq_table[i].data2;
 	    data3 = lan->seq_table[i].data3;
+	    data4 = lan->seq_table[i].data4;
 	    info = lan->seq_table[i].timer_info;
 
 	    msg.netfn = lan->seq_table[i].msg.netfn | 1;
@@ -1487,7 +1498,8 @@ lan_close_connection(ipmi_con_t *ipmi)
                this connection.  Sends will fail and receives will not
                validate. */
 	    if (handler)
-		handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+		handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3,
+			data4);
 
 	    if (rv)
 		info->cancelled = 1;
@@ -1515,7 +1527,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	if (q_item->rsp_handler)
 	    q_item->rsp_handler(ipmi, &q_item->addr, q_item->addr_len,
 				&q_item->msg, q_item->rsp_data, q_item->data2,
-				q_item->data3);
+				q_item->data3, q_item->data4);
 
 	ipmi_lock(lan->seq_num_lock);
 
@@ -1607,18 +1619,8 @@ handle_connected(ipmi_con_t *ipmi, int err)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
-    if (lan->start_con_handler) {
-	ipmi_system_interface_addr_t addr;
-
-	addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	addr.channel = IPMI_BMC_CHANNEL;
-	addr.lun = 0;
-
-	lan->start_con_handler(ipmi, err,
-			       (ipmi_addr_t *) &addr, sizeof(addr),
-			       lan->start_con_cb_data);
-	lan->start_con_handler = NULL;
-    }
+    if (lan->con_fail_handler)
+	lan->con_fail_handler(ipmi, err, lan->con_fail_cb_data);
 }
 
 static void
@@ -1637,7 +1639,8 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 				  ipmi_msg_t   *msg,
 				  void         *rsp_data,
 				  void         *data2,
-				  void         *data3)
+				  void         *data3,
+				  void         *data4)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
@@ -1711,7 +1714,7 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan)
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
 			  &msg, session_privilege_set,
-			  NULL, NULL, NULL);
+			  NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1721,7 +1724,8 @@ static void session_activated(ipmi_con_t   *ipmi,
 			      ipmi_msg_t   *msg,
 			      void         *rsp_data,
 			      void         *data2,
-			      void         *data3)
+			      void         *data3,
+			      void         *data4)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        rv;
@@ -1779,7 +1783,7 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan)
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
 			  &msg, session_activated,
-			  NULL, NULL, NULL);
+			  NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1789,7 +1793,8 @@ static void challenge_done(ipmi_con_t   *ipmi,
 			   ipmi_msg_t   *msg,
 			   void         *rsp_data,
 			   void         *data2,
-			   void         *data3)
+			   void         *data3,
+			   void         *data4)
 {
     lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
     int           rv;
@@ -1853,7 +1858,7 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data_len += IPMI_USERNAME_MAX;
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, challenge_done, NULL, NULL, NULL);
+			  &msg, challenge_done, NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1864,7 +1869,8 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	      ipmi_msg_t   *msg,
 	      void         *rsp_data,
 	      void         *data2,
-	      void         *data3)
+	      void         *data3,
+	      void         *data4)
 {
     lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
     int           rv;
@@ -1909,7 +1915,7 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data_len = 2;
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, auth_cap_done, NULL, NULL, NULL);
+			  &msg, auth_cap_done, NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1935,16 +1941,11 @@ default_lan_slave_addr_fetcher(ipmi_con_t                *ipmi,
 }
 
 static int
-lan_start_con(ipmi_con_t               *ipmi,
-	      ipmi_ll_init_con_done_cb handler,
-	      void                     *cb_data)
+lan_start_con(ipmi_con_t *ipmi)
 {
     lan_data_t     *lan = (lan_data_t *) ipmi->con_data;
     int            rv;
     struct timeval timeout;
-
-    lan->start_con_handler = handler;
-    lan->start_con_cb_data = cb_data;
 
     /* Start the timer to audit the connections. */
     lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));

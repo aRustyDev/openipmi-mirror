@@ -171,9 +171,9 @@ void ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain,
 unsigned int ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain);
 
 /* Events come in this format. */
-typedef void (*ipmi_event_handler_t)(ipmi_domain_t *domain,
-				     ipmi_event_t  *event,
-				     void          *event_data);
+typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
+				      ipmi_event_t  *event,
+				      void          *event_data);
 
 typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
 
@@ -184,7 +184,7 @@ typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
    software event or an event from a sensor the software doesn't know
    about, this handler will get it. */
 int ipmi_register_for_events(ipmi_domain_t           *domain,
-			     ipmi_event_handler_t    handler,
+			     ipmi_event_handler_cb   handler,
 			     void                    *event_data,
 			     ipmi_event_handler_id_t **id);
 /* Deregister an event handler. */
@@ -913,7 +913,7 @@ int ipmi_init_domain(ipmi_con_t     *con,
 /* This will clean up all the memory associated with IPMI. */
 void ipmi_shutdown(void);
 
-void *ipmi_get_user_data(ipmi_domain_t *domain);
+void *ipmi_domain_get_user_data(ipmi_domain_t *domain);
 
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.

@@ -56,11 +56,11 @@ typedef void (*ipmi_mc_response_handler_t)(ipmi_mc_t  *src,
    that if the mc goes away between the time the command is sent and
    the response comes back, this callback WILL be called, but the MC
    value will be NULL.  You must handle that. */
-int ipmi_send_command(ipmi_mc_t                  *mc,
-		      unsigned int               lun,
-		      ipmi_msg_t                 *cmd,
-		      ipmi_mc_response_handler_t rsp_handler,
-		      void                       *rsp_data);
+int ipmi_mc_send_command(ipmi_mc_t                  *mc,
+			 unsigned int               lun,
+			 ipmi_msg_t                 *cmd,
+			 ipmi_mc_response_handler_t rsp_handler,
+			 void                       *rsp_data);
 
 /* Basic information about a MC.  */
 int ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc);
@@ -104,42 +104,20 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 			   ipmi_mc_done_cb done,
 			   void            *done_data);
 
-/*
- * Channel information for a BMC.
- */
-typedef struct ipmi_chan_info_s
-{
-    unsigned int medium : 7;
-    unsigned int xmit_support : 1;
-    unsigned int recv_lun : 3;
-    unsigned int protocol : 5;
-    unsigned int session_support : 2;
-    unsigned int vendor_id : 24;
-    unsigned int aux_info : 16;
-} ipmi_chan_info_t;
-
-/* Get the number of channels the BMC supports. */
-int ipmi_bmc_get_num_channels(ipmi_mc_t *mc, int *val);
-
-/* Get information about a channel by index.  The index is not
-   necessarily the channel number, just an array index (up to the
-   number of channels).  Get the channel number from the returned
-   information. */
-int ipmi_bmc_get_channel(ipmi_mc_t *mc, int index, ipmi_chan_info_t *chan);
-
 /* Check to see if the MC is operational in the system.  If this is
    false, then the MC was referred to by an SDR, but it doesn't really
    exist. */
 int ipmi_mc_is_active(ipmi_mc_t *mc);
 
+
 /* Return the domain for the given MC. */
 ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc);
 
 /* Get the sensors that the given MC owns. */
-ipmi_sensor_info_t *ipmi_mc_get_sensors(ipmi_mc_t *mc);
+ipmi_sensor_info_t *_ipmi_mc_get_sensors(ipmi_mc_t *mc);
 
-/* Get the indicators that the given MC owns. */
-ipmi_control_info_t *ipmi_mc_get_controls(ipmi_mc_t *mc);
+/* Get the controls that the given MC owns. */
+ipmi_control_info_t *_ipmi_mc_get_controls(ipmi_mc_t *mc);
 
 /* Get the sensor SDRs for the given MC. */
 ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
@@ -147,14 +125,21 @@ ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
 /* Get the IPMI slave address of the given MC. */
 unsigned ipmi_mc_get_address(ipmi_mc_t *mc);
 
+/* Get the MC's full IPMI address. */
+void ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
+			      ipmi_addr_t  *addr,
+			      unsigned int *addr_len);
+
 /* Get the channel for the given MC. */
 unsigned ipmi_mc_get_channel(ipmi_mc_t *mc);
 
-/* Add an MC to the list of MCs in the BMC. */
-int ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc);
+int _ipmi_create_mc(ipmi_domain_t *domain,
+		    ipmi_addr_t   *addr,
+		    unsigned int  addr_len,
+		    ipmi_mc_t     **new_mc);
 
 /* Destroy an MC. */
-void ipmi_cleanup_mc(ipmi_mc_t *mc);
+void _ipmi_cleanup_mc(ipmi_mc_t *mc);
 
 #if 0
 /* FIXME - need to handle this somehow. */
@@ -192,22 +177,67 @@ typedef int (*ipmi_mc_del_event_cb)(ipmi_mc_t    *mc,
 void ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
 				   ipmi_mc_del_event_cb handler);
 
+typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+int _ipmi_mc_del_event(ipmi_mc_t                 *mc,
+		       ipmi_event_t              *event, 
+		       ipmi_mc_del_event_done_cb handler,
+		       void                      *cb_data);
+
 /* Set and get the OEM data pointer in the mc. */
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
 void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
 
-#if 0
-typedef void (*ipmi_mc_ptr_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+/* Check the event receiver for the MC. */
+void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
 
-/* Do a pointer callback but ignore the sequence number.  This is
-   primarily for handling incoming events, where the sequence number
-   doesn't matter. */
-int ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
-			     ipmi_mc_ptr_cb handler,
-			     void           *cb_data);
-#endif
 
 int _ipmi_mc_init(void);
 void _ipmi_mc_shutdown(void);
+
+
+void _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
+int _ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int _ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int _ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int _ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int _ipmi_mc_sel_count(ipmi_mc_t *mc);
+int _ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
+int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
+
+int ipmi_mc_oem_new_sensor(ipmi_mc_t     *mc,
+			   ipmi_entity_t *ent,
+			   ipmi_sensor_t *sensor,
+			   void          *link);
+
+/* This should be called with a new device id for an MC we don't have
+   active in the system (it may be inactive). */
+int _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp);
+
+/* Compares the data in a get device id response (in rsp) with the
+   data in the MC, returns true if they are the same and false if
+   not.  Must be called with an error-free message. */
+int _ipmi_mc_device_data_compares(ipmi_mc_t *mc, ipmi_msg_t *rsp);
+
+/* Called when a new MC has been added to the system, to kick of
+   processing it. */
+int _ipmi_mc_handle_new(ipmi_mc_t *mc);
+
+void _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
+			      ipmi_sensor_t ***sensors,
+			      unsigned int  *count);
+void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
+			      ipmi_sensor_t **sensors,
+			      unsigned int  count);
+
+ipmi_mcid_t _ipmi_mc_convert_to_id(ipmi_mc_t *mc);
+typedef void (*_ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
+int _ipmi_mc_pointer_cb(ipmi_mcid_t   id,
+		       _ipmi_mc_ptr_cb handler,
+		       void           *cb_data);
+int _ipmi_mc_pointer_noseq_cb(ipmi_mcid_t   id,
+			      _ipmi_mc_ptr_cb handler,
+			      void           *cb_data);
+int _ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
+int _ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
 
 #endif /* _IPMI_MC_H */

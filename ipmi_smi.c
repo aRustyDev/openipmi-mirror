@@ -74,7 +74,7 @@ typedef struct pending_cmd_s
     unsigned int          addr_len;
     ipmi_ll_rsp_handler_t rsp_handler;
     void                  *rsp_data;
-    void                  *data2, *data3;
+    void                  *data2, *data3, *data4;
     struct pending_cmd_s  *next, *prev;
 } pending_cmd_t;
 
@@ -112,8 +112,8 @@ typedef struct smi_data_s
     ipmi_ll_event_handler_id_t *event_handlers;
     ipmi_lock_t                *event_handlers_lock;
 
-    ipmi_ll_init_con_done_cb start_con_handler;
-    void                     *start_con_cb_data;
+    ipmi_ll_con_failed_cb      con_fail_handler;
+    void                       *con_fail_cb_data;
 
     struct smi_data_s *next, *prev;
 } smi_data_t;
@@ -327,7 +327,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     pending_cmd_t         *cmd, *finder;
     ipmi_ll_rsp_handler_t rsp_handler;
     void                  *rsp_data;
-    void                  *data2, *data3;
+    void                  *data2, *data3, *data4;
 
     cmd = (pending_cmd_t *) recv->msgid;
     
@@ -350,6 +350,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     rsp_data = cmd->rsp_data;
     data2 = cmd->data2;
     data3 = cmd->data3;
+    data4 = cmd->data4;
 
     remove_cmd(ipmi, smi, cmd);
 
@@ -361,7 +362,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     /* call the user handler. */
     rsp_handler(ipmi,
 		(ipmi_addr_t *) recv->addr, recv->addr_len,
-		&(recv->msg), rsp_data, data2, data3);
+		&(recv->msg), rsp_data, data2, data3, data4);
     return;
 
  out_unlock:
@@ -505,7 +506,8 @@ smi_send_command(ipmi_con_t            *ipmi,
 		 ipmi_ll_rsp_handler_t rsp_handler,
 		 void                  *rsp_data,
 		 void                  *data2,
-		 void                  *data3)
+		 void                  *data3,
+		 void                  *data4)
 {
     pending_cmd_t *cmd;
     smi_data_t    *smi;
@@ -530,6 +532,7 @@ smi_send_command(ipmi_con_t            *ipmi,
     cmd->rsp_data = rsp_data;
     cmd->data2 = data2;
     cmd->data3 = data3;
+    cmd->data4 = data4;
     cmd->cancelled = 0;
 
     ipmi_lock(smi->cmd_lock);
@@ -805,7 +808,10 @@ smi_set_con_fail_handler(ipmi_con_t            *ipmi,
 			 ipmi_ll_con_failed_cb handler,
 			 void                  *cb_data)
 {
-    /* SMI connections can't fail, so we ignore this. */
+    smi_data_t   *smi = ipmi->con_data;
+
+    smi->con_fail_handler = handler;
+    smi->con_fail_cb_data = cb_data;
     return;
 }
 
@@ -839,23 +845,15 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
     addr.channel = IPMI_BMC_CHANNEL;
     addr.lun = 0;
 
-    smi->start_con_handler(ipmi, 0,
-			   (ipmi_addr_t *) &addr, sizeof(addr),
-			   smi->start_con_cb_data);
+    smi->con_fail_handler(ipmi, 0, smi->con_fail_cb_data);
 }
 
 static int
-smi_start_con(ipmi_con_t               *ipmi,
-	      ipmi_ll_init_con_done_cb handler,
-	      void                     *cb_data)
+smi_start_con(ipmi_con_t *ipmi)
 {
-    smi_data_t        *smi = (smi_data_t *) ipmi->con_data;
     int               rv;
     struct timeval    timeout;
     os_hnd_timer_id_t *timer;
-
-    smi->start_con_handler = handler;
-    smi->start_con_cb_data = cb_data;
 
     /* Schedule this to run in a timeout. */
     rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &timer);

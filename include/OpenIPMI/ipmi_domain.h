@@ -68,6 +68,9 @@ typedef void (*ipmi_domain_iterate_mcs_cb)(ipmi_domain_t *domain,
 int ipmi_domain_iterate_mcs(ipmi_domain_t              *mc,
 			    ipmi_domain_iterate_mcs_cb handler,
 			    void                       *cb_data);
+int ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
+				ipmi_domain_iterate_mcs_cb handler,
+				void                       *cb_data);
 
 /* Return the OS handler used by the mc. */
 os_handler_t *ipmi_domain_get_os_hnd(ipmi_domain_t *domain);
@@ -83,6 +86,8 @@ int ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force);
    code can turn this function off.  The value is a boolean. */
 int ipmi_domain_set_full_bus_scan(ipmi_domain_t *domain, int val);
 
+int ipmi_domain_get_event_rcvr(ipmi_domain_t *domain);
+
 /* Allocate an MC in the domain.  It doesn't add it to the domain's
    list, to allow the MC to be setup before that happens. */
 int ipmi_create_mc(ipmi_domain_t *domain,
@@ -90,11 +95,13 @@ int ipmi_create_mc(ipmi_domain_t *domain,
 		   unsigned int  addr_len,
 		   ipmi_mc_t     **new_mc);
 
+int _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
+
 /* Attempt to find the MC, and if it doesn't exist create it and
    return it. */
-int ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
-					 unsigned int  slave_addr,
-					 ipmi_mc_t     **mc);
+int _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
+					  unsigned int  slave_addr,
+					  ipmi_mc_t     **mc);
 
 /* Find the MC with the given IPMI address, or return NULL if not
    found. */
@@ -104,17 +111,17 @@ ipmi_mc_t *_ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 
 /* Return the SDRs for the given MC, or the main set of SDRs if the MC
    is NULL. */
-void ipmi_domain_get_sdr_sensors(ipmi_domain_t *domain,
-				 ipmi_mc_t     *mc,
-				 ipmi_sensor_t ***sensors,
-				 unsigned int  *count);
+void _ipmi_get_sdr_sensors(ipmi_domain_t *domain,
+			   ipmi_mc_t     *mc,
+			   ipmi_sensor_t ***sensors,
+			   unsigned int  *count);
 
 /* Set the SDRs for the given MC, or the main set of SDRs if the MC is
    NULL. */
-void ipmi_domain_set_sdr_sensors(ipmi_domain_t *domain,
-				 ipmi_mc_t     *mc,
-				 ipmi_sensor_t **sensors,
-				 unsigned int  count);
+void _ipmi_set_sdr_sensors(ipmi_domain_t *domain,
+			   ipmi_mc_t     *mc,
+			   ipmi_sensor_t **sensors,
+			   unsigned int  count);
 
 /* Add an MC to the list of MCs in the domain. */
 int ipmi_add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
@@ -145,10 +152,44 @@ int ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain,
    user to be deleted. */
 void ipmi_handle_unhandled_event(ipmi_domain_t *domain, ipmi_event_t *event);
 
-/* Initialize the domain code, called only once at init time. */
-int ipmi_domain_init(void);
+/* Handle a new event from something, usually from an SEL. */
+void _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
+				       ipmi_mc_t     *mc,
+				       ipmi_event_t  *event);
 
-/* Clean up the global MC memory. */
-void ipmi_domain_shutdown(void);
+/* Returns if the domain things it has a connection up. */
+int ipmi_domain_con_up(ipmi_domain_t *domain);
+
+/*
+ * Channel information for a BMC.
+ */
+typedef struct ipmi_chan_info_s
+{
+    unsigned int medium : 7;
+    unsigned int xmit_support : 1;
+    unsigned int recv_lun : 3;
+    unsigned int protocol : 5;
+    unsigned int session_support : 2;
+    unsigned int vendor_id : 24;
+    unsigned int aux_info : 16;
+} ipmi_chan_info_t;
+
+/* Get the number of channels the domain supports. */
+int ipmi_domain_get_num_channels(ipmi_domain_t *domain, int *val);
+
+/* Get information about a channel by index.  The index is not
+   necessarily the channel number, just an array index (up to the
+   number of channels).  Get the channel number from the returned
+   information. */
+int ipmi_domain_get_channel(ipmi_domain_t    *domain,
+			    int              index,
+			    ipmi_chan_info_t *chan);
+
+
+/* Initialize the domain code, called only once at init time. */
+int _ipmi_domain_init(void);
+
+/* Clean up the global domain memory. */
+void _ipmi_domain_shutdown(void);
 
 #endif /* _IPMI_DOMAIN_H */
