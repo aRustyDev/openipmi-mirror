@@ -3,6 +3,8 @@
 	* lib/ipmi_lan.c: Fixed a bug where incoming SNMP traps were
 	compared against the wrong IP address.
 
+	* configure.in: Move to version 1.2.17.
+
 2004-03-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
