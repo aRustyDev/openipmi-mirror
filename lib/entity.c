@@ -210,6 +210,7 @@ struct ipmi_entity_s
     ipmi_fru_t   *fru;
 
     int                    hot_swappable;
+    int                    supports_managed_hot_swap;
     ipmi_entity_hot_swap_t hs_cb;
 
     ilist_t            *fru_handlers;
@@ -2112,8 +2113,12 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    if (control == ent->hot_swap_power)
+    if (control == ent->hot_swap_power) {
+	/* If don't have power control, we can't manage hot-swap. */
+	ipmi_entity_set_supports_managed_hot_swap(ent, 0);
+
 	ent->hot_swap_power = NULL;
+    }
     if (control == ent->hot_swap_indicator)
 	ent->hot_swap_indicator = NULL;
 
@@ -4607,6 +4612,35 @@ ipmi_entity_hot_swappable(ipmi_entity_t *ent)
 }
 
 int
+ipmi_entity_set_supports_managed_hot_swap(ipmi_entity_t *ent, int val)
+{
+    ent_info_update_handler_info_t info;
+
+    ent->supports_managed_hot_swap = val;
+
+    /* Make sure the user knows of the change. */
+    info.op = IPMI_CHANGED;
+    info.entity = ent;
+    info.domain = ipmi_entity_get_domain(ent);
+    ilist_iter_twoitem(ent->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+
+    /* Call the old version handler. */
+    if (ent->ents->handler)
+	ent->ents->handler(IPMI_CHANGED, info.domain, ent,
+			   ent->ents->cb_data);      
+
+    return 0;
+}
+
+int
+ipmi_entity_supports_managed_hot_swap(ipmi_entity_t *ent)
+{
+    return ent->supports_managed_hot_swap;
+}
+
+int
 ipmi_entity_add_hot_swap_handler(ipmi_entity_t           *ent,
 				 ipmi_entity_hot_swap_cb handler,
 				 void                    *cb_data)
@@ -5729,6 +5763,9 @@ handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
     }
 
     ent->hot_swap_power = control;
+
+    /* If we have power control, we can manage hot-swap. */
+    ipmi_entity_set_supports_managed_hot_swap(ent, 1);
 
     if (ent->hot_swappable) {
 	rv = ipmi_control_get_val(ent->hot_swap_power, power_checked,

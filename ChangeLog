@@ -1,3 +1,12 @@
+2004-12-07 Corey Minyard <cminyard@mvista.com> 
+	
+	* include/OpenIPMI/ipmiif.h.in: Added support for a managed
+	  hot-swap call so the user can know if the entities hot-swap
+	  states can be managed.
+	* include/OpenIPMI/ipmi_entity.h: ditto
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto
+
 2004-12-03 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca.c: Reworked the fixups for broken entity ids to
