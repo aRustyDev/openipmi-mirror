@@ -80,6 +80,7 @@ ipmi_domain_id_t domain_id;
 
 #define MAX_DOMAINS 20
 ipmi_domain_id_t domains[MAX_DOMAINS];
+int domain_initialized[MAX_DOMAINS];
 
 extern os_handler_t ipmi_ui_cb_handlers;
 ipmi_pef_t *pef;
@@ -90,8 +91,6 @@ ipmi_lan_config_t *lanparm_config;
 static int full_screen;
 struct termios old_termios;
 int old_flags;
-
-static int initialized = 0;
 
 #define STATUS_WIN_LINES 2
 #define STATUS_WIN_COLS COLS
@@ -5939,6 +5938,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
 
+    domain_initialized[dnum] = 0;
     for (num_parms=0; num_parms<30; num_parms++) {
 	parms[num_parms] = strtok_r(NULL, " \t\n", toks);
 	if (!parms[num_parms])
@@ -5947,7 +5947,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	if (parms[num_parms][0] == '"') {
 	    (parms[num_parms])++;
 	    if (parms[num_parms][0])
-		parms[num_parms][strlen(parms[num_parms])-1] = '0';
+		parms[num_parms][strlen(parms[num_parms])-1] = '\0';
 	}
     }
 
@@ -5980,7 +5980,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
     }
 
     rv = ipmi_init_domain(con, set, ipmi_ui_setup_done,
-			  NULL, NULL, &(domains[dnum]));
+			  (void *) (long) dnum, NULL, &(domains[dnum]));
     if (rv) {
 	cmd_win_out("ipmi_init_domain: %s\n", strerror(rv));
 	for (i=0; i<set; i++)
@@ -6006,10 +6006,13 @@ static void
 close_cmder(ipmi_domain_t *domain, void *cb_data)
 {
     int rv;
+    int dn = (long) cb_data;
 
     rv = ipmi_close_connection(domain, final_close, NULL);
     if (rv)
 	cmd_win_out("Could not close connection\n");
+    else
+	ipmi_domain_id_set_invalid(&(domains[dn]));
 }
 
 
@@ -6032,7 +6035,7 @@ close_domain_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
 
-    rv = ipmi_domain_pointer_cb(domains[dn], close_cmder, NULL);
+    rv = ipmi_domain_pointer_cb(domains[dn], close_cmder, (void *) (long) dn);
     if (rv)
 	cmd_win_out("Could not convert domain to a pointer\n");
 
@@ -6774,9 +6777,11 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 		   unsigned int  conn_num,
 		   unsigned int  port_num,
 		   int           still_connected,
-		   void          *user_data)
+		   void          *cb_data)
 {
     int rv;
+    int dnum = (long) cb_data;
+    static int first_init = 0;
 
     if (err)
 	ui_log("IPMI connection to con.port %d.%d is down"
@@ -6789,18 +6794,18 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     if (!still_connected) {
 	ui_log("All IPMI connections down\n");
 	return;
-    } else if (!initialized)
+    } else if (!domain_initialized[dnum])
 	ui_log("Completed setup for the IPMI connection\n");
     else {
 	return;
     }
 
-    if (!initialized) {
+    if (!first_init) {
 	domain_id = ipmi_domain_convert_to_id(domain);
-	domains[0] = domain_id;
+	first_init = 1;
     }
 
-    initialized = 1;
+    domain_initialized[dnum] = 1;
 
     rv = ipmi_register_for_events(domain, event_handler,
 				  NULL, &event_handler_id);
