@@ -3482,6 +3482,7 @@ redisplay_timeout(selector_t  *sel,
 static void
 restart_connection(void *cb_data, os_hnd_timer_id_t *id)
 {
+    ipmi_ui_cb_handlers.free_timer(&ipmi_ui_cb_handlers, id);
     ui_reconnect();
 }
 
@@ -3501,6 +3502,9 @@ ipmi_ui_setup_done(ipmi_mc_t *mc,
 	ui_log("Could not set up IPMI connection due to error 0x%x, retrying",
 	       err);
 
+	/* Start a timer to run the reconnection in 1 second.  We run
+           the reconnection in a timer because it avoid race
+           conditions with locks. */
 	rv = ipmi_ui_cb_handlers.alloc_timer(&ipmi_ui_cb_handlers, &timer);
 	if (rv)
 	    leave_err(rv, "Could not allocate timer\n");
