@@ -3167,7 +3167,7 @@ check_events_capability(ipmi_sensor_t      *sensor,
 	    unsigned int bit = 1 << i;
 
 	    if (((!sensor->mask1[i]) && (bit & states->__assertion_events))
-		|| ((sensor->mask2[i]) && (bit & states->__deassertion_events)))
+		|| ((!sensor->mask2[i]) && (bit & states->__deassertion_events)))
 	    {
 		/* The user is attempting to set a state that the
                    sensor does not support. */
