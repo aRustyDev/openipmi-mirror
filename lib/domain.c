@@ -2111,6 +2111,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_mc_t           *mc = NULL;
     ipmi_ipmb_addr_t    *ipmb;
     int                 mc_added = 0;
+    int                 mc_changed = 0;
 
 
     rv = _ipmi_domain_get(domain);
@@ -2185,6 +2186,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		       it up. */
 		    _ipmi_cleanup_mc(mc);
 		} else {
+		    mc_changed = 1;
 		    _ipmi_mc_handle_new(mc);
 		}
 	    }
@@ -2229,6 +2231,8 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
  next_addr:
     if (mc_added)
 	call_mc_upd_handlers(domain, mc, IPMI_ADDED);
+    else if (mc_changed)
+	call_mc_upd_handlers(domain, mc, IPMI_CHANGED);
 
  next_addr_nolock:
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
