@@ -56,6 +56,7 @@
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pet.h>
+#include <OpenIPMI/ipmi_conn.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -76,6 +77,9 @@ keypad_t keymap;
 command_t commands;
 
 ipmi_domain_id_t domain_id;
+
+#define MAX_DOMAINS 20
+ipmi_domain_id_t domains[MAX_DOMAINS];
 
 extern os_handler_t ipmi_ui_cb_handlers;
 ipmi_pef_t *pef;
@@ -577,8 +581,6 @@ ui_log(char *format, ...)
     va_end(ap);
 }
 
-void ui_shutdown_main(void);
-
 void
 leave(int rv, char *format, ...)
 {
@@ -626,8 +628,6 @@ leave(int rv, char *format, ...)
     va_start(ap, format);
     vfprintf(stderr, format, ap);
     va_end(ap);
-
-    ui_shutdown_main();
 
     ipmi_debug_malloc_cleanup();
     exit(rv);
@@ -823,10 +823,14 @@ key_npage(int key, void *cb_data)
     return 0;
 }
 
+static int leave_count = 0;
+
 static void
 final_leave(void *cb_data)
 {
-    leave(0, "");
+    leave_count--;
+    if (leave_count == 0)
+	leave(0, "");
 }
 
 static void
@@ -835,19 +839,23 @@ leave_cmder(ipmi_domain_t *domain, void *cb_data)
     int rv;
 
     rv = ipmi_close_connection(domain, final_leave, NULL);
-    if (rv)
-	leave(0, "");
+    if (!rv)
+	leave_count++;
 }
 
 static int
 key_leave(int key, void *cb_data)
 {
-    int rv;
+    int dnum;
 
-    rv = ipmi_domain_pointer_cb(domain_id, leave_cmder, NULL);
-    if (rv) {
-	leave(0, "");
+    for (dnum=0; dnum<MAX_DOMAINS; dnum++) {
+	if (!ipmi_domain_id_is_invalid(&(domains[dnum]))) {
+	    ipmi_domain_pointer_cb(domains[dnum], leave_cmder, NULL);
+	}
     }
+    if (leave_count == 0)
+	leave(0, "");
+
     return 0;
 }
 
@@ -5795,39 +5803,6 @@ scan_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-extern void ui_reconnect(void);
-
-static void
-disconnect_done(void *cb_data)
-{
-    initialized = 0;
-    ui_reconnect();
-}
-
-static void
-reconnect_cmder(ipmi_domain_t *domain, void *cb_data)
-{
-    int rv;
-
-    rv = ipmi_close_connection(domain, disconnect_done, NULL);
-    if (rv)
-	cmd_win_out("Could not close connection: %x\n", rv);
-}
-
-int
-reconnect_cmd(char *cmd, char **toks, void *cb_data)
-{
-    int rv;
-
-    rv = ipmi_domain_pointer_cb(domain_id, reconnect_cmder, NULL);
-    if (rv) {
-	cmd_win_out("Unable to convert domain id to a pointer\n");
-	return 0;
-    }
-    
-    return 0;
-}
-
 static void
 presence_cmder(ipmi_domain_t *domain, void *cb_data)
 {
@@ -5937,6 +5912,146 @@ static int
 log_win_cmd(char *cmd, char **toks, void *cb_data)
 {
     curr_win = LOG_WIN_SCROLL;
+    return 0;
+}
+
+static int
+new_domain_cmd(char *cmd, char **toks, void *cb_data)
+{
+    const char   *parms[30];
+    int          num_parms;
+    unsigned int curr_parm = 0;
+    ipmi_args_t  *con_parms[2];
+    int          set = 0;
+    int          i;
+    int          dnum;
+    ipmi_con_t   *con[2];
+    int          rv;
+
+    for (dnum=0; dnum<MAX_DOMAINS; dnum++) {
+	if (ipmi_domain_id_is_invalid(&(domains[dnum]))) {
+	    break;
+	}
+    }
+    if (dnum == MAX_DOMAINS) {
+	cmd_win_out("Too many domains registered\n");
+	return 0;
+    }
+
+    for (num_parms=0; num_parms<30; num_parms++) {
+	parms[num_parms] = strtok_r(NULL, " \t\n", toks);
+	if (!parms[num_parms])
+	    break;
+    }
+
+    rv = ipmi_parse_args(&curr_parm, num_parms, parms, &con_parms[set]);
+    if (rv) {
+	cmd_win_out("First connection parms are invalid\n");
+	return 0;
+    }
+    set++;
+
+    if (curr_parm > num_parms) {
+	rv = ipmi_parse_args(&curr_parm, num_parms, parms, &con_parms[set]);
+	if (rv) {
+	    ipmi_free_args(con_parms[0]);
+	    cmd_win_out("Second connection parms are invalid\n");
+	    return 0;
+	}
+	set++;
+    }
+
+    for (i=0; i<set; i++) {
+	rv = ipmi_args_setup_con(con_parms[i],
+				 &ipmi_ui_cb_handlers,
+				 ui_sel,
+				 &con[i]);
+	if (rv) {
+	    cmd_win_out("ipmi_ip_setup_con: %s\n", strerror(rv));
+	    goto out;
+	}
+    }
+
+    rv = ipmi_init_domain(con, set, ipmi_ui_setup_done,
+			  NULL, NULL, &(domains[dnum]));
+    if (rv) {
+	cmd_win_out("ipmi_init_domain: %s\n", strerror(rv));
+	for (i=0; i<set; i++)
+	    con[i]->close_connection(con[i]);
+    }
+
+    cmd_win_out("Domain %d started\n", dnum);
+ out:
+    for (i=0; i<set; i++)
+	ipmi_free_args(con_parms[i]);
+
+    return 0;
+
+}
+
+static void
+final_close(void *cb_data)
+{
+    ui_log("Domain close");
+}
+
+static void
+close_cmder(ipmi_domain_t *domain, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_close_connection(domain, final_close, NULL);
+    if (rv)
+	cmd_win_out("Could not close connection\n");
+}
+
+
+static int
+close_domain_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned int dn;
+    int          rv;
+
+    if (get_uint(toks, &dn, "domain number"))
+	return 0;
+
+    if (dn >= MAX_DOMAINS) {
+	cmd_win_out("invalid_domain_number\n");
+	return 0;
+    }
+
+    if (ipmi_domain_id_is_invalid(&(domains[dn]))) {
+	cmd_win_out("invalid_domain_number\n");
+	return 0;
+    }
+
+    rv = ipmi_domain_pointer_cb(domains[dn], close_cmder, NULL);
+    if (rv)
+	cmd_win_out("Could not convert domain to a pointer\n");
+
+    return 0;
+}
+
+static int
+set_domain_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned int dn;
+
+    if (get_uint(toks, &dn, "domain number"))
+	return 0;
+
+    if (dn >= MAX_DOMAINS) {
+	cmd_win_out("invalid_domain_number\n");
+	return 0;
+    }
+
+    if (ipmi_domain_id_is_invalid(&(domains[dn]))) {
+	cmd_win_out("invalid_domain_number\n");
+	return 0;
+    }
+
+    domain_id = domains[dn];
+
     return 0;
 }
 
@@ -6093,8 +6208,12 @@ static struct {
       " - leave the program" },
     { "check_presence", presence_cmd,
       " - Check the presence of entities" },
-    { "reconnect",  reconnect_cmd,
-      " - scan an IPMB to add or remove it" },
+    { "new_domain", new_domain_cmd,
+      " parms - Open a connection to a new domain" },
+    { "close_domain", close_domain_cmd,
+      " <num> - close the given domain number" },
+    { "set_domain", set_domain_cmd,
+      " <num> - Use the given domain number" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
@@ -6669,9 +6788,12 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 	return;
     }
 
-    initialized = 1;
+    if (!initialized) {
+	domain_id = ipmi_domain_convert_to_id(domain);
+	domains[0] = domain_id;
+    }
 
-    domain_id = ipmi_domain_convert_to_id(domain);
+    initialized = 1;
 
     rv = ipmi_register_for_events(domain, event_handler,
 				  NULL, &event_handler_id);
@@ -6704,16 +6826,14 @@ ipmi_ui_domain_ready(ipmi_domain_t *domain,
 {
 }
 
-void
-ipmi_ui_set_domain_id(ipmi_domain_id_t new_domain_id)
-{
-    domain_id = new_domain_id;
-}
-
 int
 ipmi_ui_init(selector_t **selector, int do_full_screen)
 {
     int rv;
+    int i;
+
+    for (i=0; i<MAX_DOMAINS; i++)
+	ipmi_domain_id_set_invalid(&(domains[0]));
 
     full_screen = do_full_screen;
 

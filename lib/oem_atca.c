@@ -2001,7 +2001,7 @@ atca_find_fru_info(atca_shelf_t *info, ipmi_entity_t *entity)
     if (!minfo) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_find_fru_info): "
-		 "Could find address associated with the FRU: 0x%x",
+		 "Could not find address associated with the FRU: 0x%x",
 		 ENTITY_NAME(entity), ipmb_addr);
 	return NULL;
     }

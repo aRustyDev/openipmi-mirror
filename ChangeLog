@@ -5,6 +5,9 @@
 
 	* configure.in: Move to version 1.3.6
 
+	* ui/ui.c, ui/basic_ui.c: Add support for multiple domain
+	connections.
+
 2004-04-21 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca.c: Added another OEM handler.
