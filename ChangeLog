@@ -3,6 +3,8 @@
 	* lib/domain.c: Fix a connection problem where connection ups were
 	being reported during the connection process.
 
+	* configure.in: Move to version 1.3.6
+
 2004-04-21 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca.c: Added another OEM handler.
@@ -12,8 +14,6 @@
 
 	* lib/ipmi_lan.c: Make sure the dev id and such goes on the right
 	channels when a connection is coming up.
-
-	* configure.in: Move to version 1.3.6
 
 2004-04-15 Corey Minyard <cminyard@mvista.com> 
 
