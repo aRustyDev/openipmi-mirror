@@ -4033,8 +4033,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
     if (still_connected) {
 	domain->con_up[u] = 1;
 	if (domain->connecting) {
-	    /* If we are connecting, report it. */
-	    call_con_change(domain, err, u, port_num, 1);
+	    /* If we are connecting, don't report it, it will be
+	       reported when the connection is finished. */
 	} else if (domain->connection_up) {
 	    /* We already have a connection, just report this. */
 	    call_con_change(domain, err, u, port_num, domain->connection_up);

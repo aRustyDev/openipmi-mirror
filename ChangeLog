@@ -1,3 +1,8 @@
+2004-04-22 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/domain.c: Fix a connection problem where connection ups were
+	being reported during the connection process.
+
 2004-04-21 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca.c: Added another OEM handler.
