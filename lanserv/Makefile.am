@@ -30,7 +30,7 @@ libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
-ipmilan_LDADD = -lpopt libIPMIlanserv.la
+ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmilan_LDFLAGS = -rdynamic
 
 lanserv_emu_SOURCES = lanserv_emu.c emu.c emu_cmd.c
