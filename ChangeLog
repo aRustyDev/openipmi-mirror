@@ -8,6 +8,8 @@
 	* lib/entity.c: Added a slot sensor as one that has a bit presence
 	detector.
 
+	* lib/entity.c: Don't require event support for a presence sensor.
+
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.22.
