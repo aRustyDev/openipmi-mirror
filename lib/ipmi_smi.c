@@ -940,6 +940,9 @@ smi_register_for_events(ipmi_con_t                 *ipmi,
 	}
     }
 
+    if (id)
+	*id = entry;
+
  out_unlock:
     ipmi_unlock(smi->event_handlers_lock);
  out_unlock2:

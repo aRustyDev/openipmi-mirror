@@ -1391,6 +1391,12 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
+    /* If the sensor should *not* be ignored if there is no entity,
+       then it shouldn't be considered for presence detection, since
+       it may be there even if the entity is not present. */
+    if (! ipmi_sensor_get_ignore_if_no_entity(sensor))
+	return;
+
     rv = ipmi_reading_get(sensor, detect_reading_read, info);
     if (rv)
 	rv = ipmi_states_get(sensor, detect_states_read, info);

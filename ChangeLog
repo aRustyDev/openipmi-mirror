@@ -1,3 +1,16 @@
+2004-12-28 Corey Minyard <cminyard@mvista.com> 
+
+	* ui/ui.c: Changes the sensor event handlers to use the add
+	versions instead of the old set versions.
+
+	* lib/entity.c: Fixed presence detection to not use sensors for
+	entity presence that are there if the entity is not present.
+
+2004-12-14 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_smi.c: Return the entry when registering commands
+	to watch.
+
 2004-12-13 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sel.c: Modify the SEL fetching to only fetch records at
