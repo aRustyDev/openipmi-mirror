@@ -2,6 +2,9 @@
 
 	* configure.in: Move to version 1.2.19.
 
+	* lib/mc.c: Fix the set_time routine to pass in the info to the
+	message send.
+
 2004-03-09 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Don't create the "healthy" sensor for
