@@ -479,7 +479,7 @@ handle_sel_data(ipmi_mc_t  *mc,
         fetch_complete(sel, ENXIO);
 	goto out;
     }
-	
+
     if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this

@@ -1,3 +1,8 @@
+2004-06-29 Corey Minyard <cminyard@mvista.com> 
+
+	* unix/posix_thread_os_handler.c: Fixed a problem in write_unlock
+	with a bogus error check.
+
 2004-06-28 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a theoretical race condition in fetching
