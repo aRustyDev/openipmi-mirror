@@ -2440,7 +2440,7 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.msg.data = data;
 
     info.found = 0;
-    rv = _ipmi_mc_pointer_noseq_cb(info.mc_id, mccmd_handler, cb_data);
+    rv = _ipmi_mc_pointer_noseq_cb(info.mc_id, mccmd_handler, &info);
     if (rv) {
 	cmd_win_out("Unable to convert MC id to a pointer\n");
 	return 0;

@@ -128,6 +128,8 @@ typedef struct lan_data_s
     ipmi_con_t                 *ipmi;
     int                        fd;
 
+    unsigned char              slave_addr;
+
     int                        curr_ip_addr;
     struct sockaddr_in         ip_addr[MAX_IP_ADDR];
     int                        ip_working[MAX_IP_ADDR];
@@ -168,6 +170,9 @@ typedef struct lan_data_s
 	void                  *data2;
 	void                  *data3;
 	void                  *data4;
+	int                   use_orig_addr;
+	ipmi_addr_t           orig_addr;
+	unsigned int          orig_addr_len;
 	os_hnd_timer_id_t     *timer;
 	lan_timer_info_t      *timer_info;
 	unsigned int          retries;
@@ -852,6 +857,9 @@ handle_msg_send(lan_timer_info_t      *info,
     unsigned int   seq;
     struct timeval timeout;
     int            rv;
+    ipmi_addr_t    tmp_addr;
+    ipmi_addr_t    *orig_addr = NULL;
+    unsigned int   orig_addr_len = 0;
 
     seq = (lan->last_seq + 1) % 64;
     while (lan->seq_table[seq].inuse) {
@@ -863,6 +871,26 @@ handle_msg_send(lan_timer_info_t      *info,
 	}
 
 	seq = (seq + 1) % 64;
+    }
+
+    if ((addr->addr_type == IPMI_IPMB_ADDR_TYPE)
+	|| (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE))
+    {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
+
+	if (ipmb->slave_addr == lan->slave_addr) {
+	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
+	    /* Most systems don't handle sending to your own slave
+               address, so we have to translate here. */
+
+	    si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	    si->channel = IPMI_BMC_CHANNEL;
+	    si->lun = ipmb->lun;
+	    orig_addr = addr;
+	    orig_addr_len = addr_len;
+	    addr = &tmp_addr;
+	    addr_len = sizeof(*si);
+	}
     }
 
     info->seq = seq;
@@ -879,6 +907,16 @@ handle_msg_send(lan_timer_info_t      *info,
     memcpy(lan->seq_table[seq].data, msg->data, msg->data_len);
     lan->seq_table[seq].timer_info = info;
     lan->seq_table[seq].retries = 0;
+    if (orig_addr) {
+	lan->seq_table[seq].use_orig_addr = 1;
+	memcpy(&(lan->seq_table[seq].orig_addr), orig_addr, orig_addr_len);
+	lan->seq_table[seq].orig_addr_len = orig_addr_len;
+
+	/* In case it's a broadcast. */
+	lan->seq_table[seq].orig_addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+    } else {
+	lan->seq_table[seq].use_orig_addr = 0;
+    }
 
     timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
     timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
@@ -1220,6 +1258,13 @@ data_handler(int            fd,
     data3 = lan->seq_table[seq].data3;
     data4 = lan->seq_table[seq].data4;
     lan->seq_table[seq].inuse = 0;
+
+    if (lan->seq_table[seq].use_orig_addr) {
+	/* We did an address translation, so translate back. */
+	memcpy(&addr, &lan->seq_table[seq].orig_addr,
+	       lan->seq_table[seq].orig_addr_len);
+	addr_len = lan->seq_table[seq].orig_addr_len;
+    }
 
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
@@ -2033,6 +2078,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi->con_data = lan;
 
     lan->ipmi = ipmi;
+    lan->slave_addr = 0x20; /* Assume this until told otherwise */
     lan->authtype = authtype;
     lan->privilege = privilege;
 

@@ -108,6 +108,7 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
    false, then the MC was referred to by an SDR, but it doesn't really
    exist. */
 int ipmi_mc_is_active(ipmi_mc_t *mc);
+void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
 
 
 /* Return the domain for the given MC. */

@@ -48,8 +48,6 @@
 
 #include "ilist.h"
 
-#define MAX_IPMI_USED_CHANNELS 8
-
 /* Rescan the bus for MCs every 10 minutes by default. */
 #define IPMI_RESCAN_BUS_INTERVAL 600
 
@@ -93,9 +91,13 @@ struct ipmi_domain_s
     ipmi_sensor_t **sensors_in_main_sdr;
     unsigned int  sensors_in_main_sdr_count;
 
-    ipmi_chan_info_t chan[MAX_IPMI_USED_CHANNELS];
-    unsigned char    msg_int_type;
-    unsigned char    event_msg_int_type;
+    /* Major and minor versions of the connection. */
+    unsigned int major_version : 4;
+    unsigned int minor_version : 4;
+    unsigned int SDR_repository_support : 1;
+
+    /* A special MC used to represent the system interface. */
+    ipmi_mc_t *si_mc;
 
     ilist_t            *mc_list;
     ipmi_lock_t        *mc_list_lock;
@@ -127,6 +129,10 @@ struct ipmi_domain_s
     /* This is a list of all the bus scans currently happening, so
        they can be properly freed. */
     mc_ipmb_scan_info_t *bus_scans_running;
+
+    ipmi_chan_info_t chan[MAX_IPMI_USED_CHANNELS];
+    unsigned char    msg_int_type;
+    unsigned char    event_msg_int_type;
 
     /* A list of connection fail handler, separate from the main one. */
     ilist_t *con_fail_handlers;
@@ -184,7 +190,10 @@ cleanup_domain(ipmi_domain_t *domain)
     ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
     ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
 
-	/* Destroy the main SDR repository, if it exists. */
+    if (domain->si_mc)
+	_ipmi_cleanup_mc(domain->si_mc);
+
+    /* Destroy the main SDR repository, if it exists. */
     if (domain->main_sdrs)
 	ipmi_sdr_info_destroy(domain->main_sdrs, NULL, NULL);
 
@@ -262,9 +271,10 @@ static int
 setup_domain(ipmi_con_t    *ipmi,
 	     ipmi_domain_t **new_domain)
 {
-    struct timeval timeout;
-    ipmi_domain_t  *domain;
-    int            rv;
+    struct timeval               timeout;
+    ipmi_domain_t                *domain;
+    int                          rv;
+    ipmi_system_interface_addr_t si;
 
     domain = ipmi_mem_alloc(sizeof(*domain));
     if (!domain)
@@ -307,6 +317,19 @@ setup_domain(ipmi_con_t    *ipmi,
     domain->do_bus_scan = 1;
 
     domain->connection_up = 0;
+
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = IPMI_BMC_CHANNEL;
+    si.lun = 0;
+    rv = _ipmi_create_mc(domain,
+			 (ipmi_addr_t *) &si, sizeof(si),
+			 &domain->si_mc);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_sdr_info_alloc(domain, domain->si_mc, 0, 0, &domain->main_sdrs);
+    if (rv)
+	goto out_err;
 
     domain->mc_list = alloc_ilist();
     if (! domain->mc_list) {
@@ -404,7 +427,7 @@ ipmi_domain_entity_unlock(ipmi_domain_t *domain)
  *
  **********************************************************************/
 
-/* A list of all the registered BMCs. */
+/* A list of all the registered domains. */
 static ipmi_domain_t *domains = NULL;
 
 static void
@@ -487,6 +510,10 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
     if (addr_len > sizeof(ipmi_addr_t))
 	return NULL;
 
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	return domain->si_mc;
+    }
+
     memcpy(&(info.addr), addr, addr_len);
     info.addr_len = addr_len;
     return ilist_search(domain->mc_list, mc_cmp, &info);
@@ -546,7 +573,6 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     int          found = 0;
     ilist_iter_t iter;
 
-    /* Remove it from the BMC list. */
     ipmi_lock(domain->mc_list_lock);
     ilist_init_iter(&iter, domain->mc_list);
     rv = ilist_first(&iter);
@@ -589,6 +615,8 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
     rv = _ipmi_create_mc(domain, (ipmi_addr_t *) &addr, sizeof(addr), &mc);
     if (rv)
 	return rv;
+
+    _ipmi_mc_set_active(mc, 0);
 
     rv = add_mc_to_domain(domain, mc);
     if (rv) {
@@ -1807,6 +1835,19 @@ ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
     }
 }
 
+int
+ipmi_domain_set_con_fail_handler(ipmi_domain_t  *domain,
+				 ipmi_domain_cb handler,
+				 void           *cb_data)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    domain->con_fail_handler = handler;
+    domain->con_fail_cb_data = cb_data;
+
+    return 0;
+}
+
 typedef struct con_fail_info_s
 {
     ipmi_domain_t *domain;
@@ -1822,17 +1863,240 @@ iterate_con_fails(ilist_iter_t *iter, void *item, void *cb_data)
     id->handler(info->domain, info->err, id->cb_data);
 }
 
-int
-ipmi_domain_set_con_fail_handler(ipmi_domain_t  *domain,
-				 ipmi_domain_cb handler,
-				 void           *cb_data)
+static void
+call_con_fails(ipmi_domain_t *domain, int err)
 {
-    CHECK_DOMAIN_LOCK(domain);
+    con_fail_info_t info = {domain, err};
+    if (domain->con_fail_handler)
+	domain->con_fail_handler(domain, err, domain->con_fail_cb_data);
+    ilist_iter(domain->con_fail_handlers, iterate_con_fails, &info);
+}
 
-    domain->con_fail_handler = handler;
-    domain->con_fail_cb_data = cb_data;
 
-    return 0;
+static void	
+con_up_complete(ipmi_domain_t *domain)
+{
+    domain->connection_up = 1;
+
+    ipmi_lock(domain->mc_list_lock);
+    start_mc_scan(domain);
+    ipmi_unlock(domain->mc_list_lock);
+    ipmi_detect_ents_presence_changes(domain->entities, 1);
+
+    call_con_fails(domain, 0);
+
+    ipmi_entity_scan_sdrs(domain->entities, domain->main_sdrs);
+    ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
+}
+
+static void
+chan_info_rsp_handler(ipmi_mc_t  *mc,
+		      ipmi_msg_t *rsp,
+		      void       *rsp_data)
+{
+    int           rv = 0;
+    long          curr = (long) rsp_data;
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+
+    if (rsp->data[0] != 0) {
+	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+    } else if (rsp->data_len < 8) {
+	rv = EINVAL;
+    }
+
+    if (rv) {
+	/* Got an error, could be out of channels. */
+	if (curr == 0) {
+	    /* Didn't get any channels, just set up a default channel
+	       zero and IPMB. */
+	    domain->chan[0].medium = 1; /* IPMB */
+	    domain->chan[0].xmit_support = 1;
+	    domain->chan[0].recv_lun = 0;
+	    domain->chan[0].protocol = 1; /* IPMB */
+	    domain->chan[0].session_support = 0; /* Session-less */
+	    domain->chan[0].vendor_id = 0x001bf2;
+	    domain->chan[0].aux_info = 0;
+	}
+	goto chan_info_done;
+    }
+
+    /* Get the info from the channel info response. */
+    domain->chan[curr].medium = rsp->data[2] & 0x7f;
+    domain->chan[curr].xmit_support = rsp->data[2] >> 7;
+    domain->chan[curr].recv_lun = (rsp->data[2] >> 4) & 0x7;
+    domain->chan[curr].protocol = rsp->data[3] & 0x1f;
+    domain->chan[curr].session_support = rsp->data[4] >> 6;
+    domain->chan[curr].vendor_id = (rsp->data[5]
+				    || (rsp->data[6] << 8)
+				    || (rsp->data[7] << 16));
+    domain->chan[curr].aux_info = rsp->data[8] | (rsp->data[9] << 8);
+
+    curr++;
+    if (curr < MAX_IPMI_USED_CHANNELS) {
+	ipmi_msg_t    cmd_msg;
+	unsigned char cmd_data[1];
+
+	cmd_msg.netfn = IPMI_APP_NETFN;
+	cmd_msg.cmd = IPMI_GET_CHANNEL_INFO_CMD;
+	cmd_msg.data = cmd_data;
+	cmd_msg.data_len = 1;
+	cmd_data[0] = curr;
+
+	rv = ipmi_mc_send_command(mc, 0 ,&cmd_msg, chan_info_rsp_handler,
+				  (void *) curr);
+    } else {
+	goto chan_info_done;
+    }
+
+    if (rv) {
+	call_con_fails(domain, rv);
+	return;
+    }
+
+    return;
+
+ chan_info_done:
+    domain->msg_int_type = 0xff;
+    domain->event_msg_int_type = 0xff;
+    con_up_complete(domain);
+}
+
+static int 
+get_channels(ipmi_domain_t *domain)
+{
+    int rv;
+
+    if ((domain->major_version > 1)
+	|| ((domain->major_version == 1) && (domain->minor_version >= 5)))
+    {
+	ipmi_msg_t    cmd_msg;
+	unsigned char cmd_data[1];
+
+	/* IPMI 1.5 or later, use a get channel command. */
+	cmd_msg.netfn = IPMI_APP_NETFN;
+	cmd_msg.cmd = IPMI_GET_CHANNEL_INFO_CMD;
+	cmd_msg.data = cmd_data;
+	cmd_msg.data_len = 1;
+	cmd_data[0] = 0;
+
+	rv = ipmi_mc_send_command(domain->si_mc, 0, &cmd_msg,
+				  chan_info_rsp_handler, (void *) 0);
+    } else {
+	ipmi_sdr_t sdr;
+
+	/* Get the channel info record. */
+	rv = ipmi_get_sdr_by_type(domain->main_sdrs, 0x14, &sdr);
+	if (rv) {
+	    /* Add a dummy channel zero and finish. */
+	    domain->chan[0].medium = 1; /* IPMB */
+	    domain->chan[0].xmit_support = 1;
+	    domain->chan[0].recv_lun = 0;
+	    domain->chan[0].protocol = 1; /* IPMB */
+	    domain->chan[0].session_support = 0; /* Session-less */
+	    domain->chan[0].vendor_id = 0x001bf2;
+	    domain->chan[0].aux_info = 0;
+	    domain->msg_int_type = 0xff;
+	    domain->event_msg_int_type = 0xff;
+	    domain->msg_int_type = 0xff;
+	    domain->event_msg_int_type = 0xff;
+	    rv = 0;
+	} else {
+	    int i;
+
+	    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+		int protocol = sdr.data[i] & 0xf;
+		
+		if (protocol != 0) {
+		    domain->chan[i].medium = 1; /* IPMB */
+		    domain->chan[i].xmit_support = 1;
+		    domain->chan[i].recv_lun = 0;
+		    domain->chan[i].protocol = protocol;
+		    domain->chan[i].session_support = 0; /* Session-less */
+		    domain->chan[i].vendor_id = 0x001bf2;
+		    domain->chan[i].aux_info = 0;
+		}
+	    }
+	    domain->msg_int_type = sdr.data[8];
+	    domain->event_msg_int_type = sdr.data[9];
+	}
+
+	con_up_complete(domain);
+    }
+
+    return rv;
+}
+
+static void
+sdr_handler(ipmi_sdr_info_t *sdrs,
+	    int             err,
+	    int             changed,
+	    unsigned int    count,
+	    void            *cb_data)
+{
+    ipmi_domain_t *domain = cb_data;
+    int           rv;
+
+    if (err) {
+	/* Just report an error, it shouldn't be a big deal if this
+           fails. */
+	ipmi_log(IPMI_LOG_WARNING, "Could not get main SDRs, error 0x%x", err);
+    }
+
+    rv = get_channels(domain);
+    if (rv)
+	call_con_fails(domain, rv);
+}
+
+static int 
+get_sdrs(ipmi_domain_t *domain)
+{
+    return ipmi_sdr_fetch(domain->main_sdrs, sdr_handler, domain);
+}
+
+static void
+got_dev_id(ipmi_mc_t  *mc,
+	   ipmi_msg_t *rsp,
+	   void       *rsp_data)
+{
+    ipmi_domain_t *domain = rsp_data;
+    int           rv;
+
+    if ((rsp->data[0] != 0) || (rsp->data_len < 12)) {
+	/* At least the get device id has to work. */
+	call_con_fails(domain, EINVAL);
+	return;
+    }
+
+    domain->major_version = rsp->data[5] & 0xf;
+    domain->minor_version = (rsp->data[5] >> 4) & 0xf;
+    domain->SDR_repository_support = (rsp->data[6] & 0x02) == 0x02;
+
+    if (domain->major_version < 1) {
+	/* We only support 1.0 and greater. */
+	call_con_fails(domain, EINVAL);
+	return;
+    }
+
+    if (domain->SDR_repository_support) {
+	rv = get_sdrs(domain);
+    } else {
+	rv = get_channels(domain);
+    }
+    if (rv)
+	call_con_fails(domain, rv);
+}
+
+static int
+start_con_up(ipmi_domain_t *domain)
+{
+    ipmi_msg_t msg;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+    msg.data_len = 0;
+    msg.data = NULL;
+
+    return ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
 }
 
 static void
@@ -1841,30 +2105,26 @@ ll_con_failed(ipmi_con_t *ipmi,
 	      void       *cb_data)
 {
     ipmi_domain_t   *domain = cb_data;
-    con_fail_info_t info = {domain, err};
     int             rv;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
     if (rv)
-	/* So the connection failed.  So what, there's no BMC. */
+	/* So the connection failed.  So what, there's nothing to talk to. */
 	goto out_unlock;
 
     if (err) {
 	domain->connection_up = 0;
     } else {
-	domain->connection_up = 1;
-	/* When a connection comes back up, rescan the bus and do
-           entity presence detection. */
-	ipmi_lock(domain->mc_list_lock);
-	start_mc_scan(domain);
-	ipmi_unlock(domain->mc_list_lock);
-	ipmi_detect_ents_presence_changes(domain->entities, 1);
+	/* When a connection comes back up, start the process of
+	   getting SDRs, scanning the bus, and the like. */
+	rv = start_con_up(domain);
+	if (rv)
+	    err = rv;
     }
 
-    if (domain->con_fail_handler)
-	domain->con_fail_handler(domain, err, domain->con_fail_cb_data);
-    ilist_iter(domain->con_fail_handlers, iterate_con_fails, &info);
+    if (err)
+	call_con_fails(domain, err);
 
  out_unlock:
     ipmi_read_unlock();

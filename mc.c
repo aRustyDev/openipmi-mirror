@@ -302,8 +302,6 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	mc->sel_timer_info = NULL;
     }
 
-    /* FIXME - clean up entities that came from this device. */
-
     /* Call the OEM handler for removal, if it has been registered. */
     if (mc->removed_mc_handler)
 	mc->removed_mc_handler(domain, mc, mc->removed_mc_cb_data);
@@ -365,6 +363,7 @@ _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event)
 void
 _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event)
 {
+    ipmi_sel_event_add(mc->sel, event);
 }
 
 unsigned long
@@ -1195,6 +1194,8 @@ _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
 			 ipmi_sensor_t ***sensors,
 			 unsigned int  *count)
 {
+    *sensors = mc->sensors_in_my_sdr;
+    *count = mc->sensors_in_my_sdr_count;
 }
 
 void
@@ -1202,6 +1203,8 @@ _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
 			 ipmi_sensor_t **sensors,
 			 unsigned int  count)
 {
+    mc->sensors_in_my_sdr = sensors;
+    mc->sensors_in_my_sdr_count = count;
 }
 
 /***********************************************************************
@@ -1221,6 +1224,12 @@ int
 ipmi_mc_is_active(ipmi_mc_t *mc)
 {
     return mc->active;
+}
+
+void
+_ipmi_mc_set_active(ipmi_mc_t *mc, int val)
+{
+    mc->active = val;
 }
 
 void
@@ -1584,191 +1593,6 @@ _ipmi_mc_shutdown(void)
  * Stuff we don't know what to do with yet.
  *
  **********************************************************************/
-
-static void
-chan_info_rsp_handler(ipmi_mc_t  *mc,
-		      ipmi_msg_t *rsp,
-		      void       *rsp_data)
-{
-    int  rv = 0;
-    long curr = (long) rsp_data;
-
-    if (rsp->data[0] != 0) {
-	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
-    } else if (rsp->data_len < 8) {
-	rv = EINVAL;
-    }
-
-    if (rv) {
-	/* Got an error, could be out of channels. */
-	if (curr == 0) {
-	    /* Didn't get any channels, just set up a default channel
-	       zero and IPMB. */
-	    mc->bmc->chan[0].medium = 1; /* IPMB */
-	    mc->bmc->chan[0].xmit_support = 1;
-	    mc->bmc->chan[0].recv_lun = 0;
-	    mc->bmc->chan[0].protocol = 1; /* IPMB */
-	    mc->bmc->chan[0].session_support = 0; /* Session-less */
-	    mc->bmc->chan[0].vendor_id = 0x001bf2;
-	    mc->bmc->chan[0].aux_info = 0;
-	}
-	goto chan_info_done;
-    }
-
-    /* Get the info from the channel info response. */
-    mc->bmc->chan[curr].medium = rsp->data[2] & 0x7f;
-    mc->bmc->chan[curr].xmit_support = rsp->data[2] >> 7;
-    mc->bmc->chan[curr].recv_lun = (rsp->data[2] >> 4) & 0x7;
-    mc->bmc->chan[curr].protocol = rsp->data[3] & 0x1f;
-    mc->bmc->chan[curr].session_support = rsp->data[4] >> 6;
-    mc->bmc->chan[curr].vendor_id = (rsp->data[5]
-				     || (rsp->data[6] << 8)
-				     || (rsp->data[7] << 16));
-    mc->bmc->chan[curr].aux_info = rsp->data[8] | (rsp->data[9] << 8);
-
-    curr++;
-    if (curr < MAX_IPMI_USED_CHANNELS) {
-	ipmi_msg_t    cmd_msg;
-	unsigned char cmd_data[1];
-
-	cmd_msg.netfn = IPMI_APP_NETFN;
-	cmd_msg.cmd = IPMI_GET_CHANNEL_INFO_CMD;
-	cmd_msg.data = cmd_data;
-	cmd_msg.data_len = 1;
-	cmd_data[0] = curr;
-
-	rv = ipmi_send_command(mc, 0 ,&cmd_msg, chan_info_rsp_handler,
-			       (void *) curr);
-    } else {
-	goto chan_info_done;
-    }
-
-    if (rv) {
-	if (mc->bmc->setup_done)
-	    mc->bmc->setup_done(mc, rv, mc->bmc->setup_done_cb_data);
-	ipmi_close_connection(mc, NULL, NULL);
-	return;
-    }
-
-    return;
-
- chan_info_done:
-    mc->bmc->msg_int_type = 0xff;
-    mc->bmc->event_msg_int_type = 0xff;
-
-    set_operational(mc);
-}
-
-static int
-finish_mc_handling(ipmi_mc_t *mc)
-{
-    int major, minor;
-    int rv = 0;
-
-    major = ipmi_mc_major_version(mc);
-    minor = ipmi_mc_minor_version(mc);
-    if ((major > 1) || ((major == 1) && (minor >= 5))) {
-	ipmi_msg_t    cmd_msg;
-	unsigned char cmd_data[1];
-
-	mc->bmc->state = QUERYING_CHANNEL_INFO;
-
-	/* IPMI 1.5 or later, use a get channel command. */
-	cmd_msg.netfn = IPMI_APP_NETFN;
-	cmd_msg.cmd = IPMI_GET_CHANNEL_INFO_CMD;
-	cmd_msg.data = cmd_data;
-	cmd_msg.data_len = 1;
-	cmd_data[0] = 0;
-
-	rv = ipmi_send_command(mc, 0, &cmd_msg, chan_info_rsp_handler,
-			       (void *) 0);
-    } else {
-	ipmi_sdr_t sdr;
-
-	/* Get the channel info record. */
-	rv = ipmi_get_sdr_by_type(mc->bmc->main_sdrs, 0x14, &sdr);
-	if (rv)
-	    /* Maybe it's in the device SDRs. */
-	    rv = ipmi_get_sdr_by_type(mc->sdrs, 0x14, &sdr);
-
-	if (rv) {
-	    /* Add a dummy channel zero and finish. */
-	    mc->bmc->chan[0].medium = 1; /* IPMB */
-	    mc->bmc->chan[0].xmit_support = 1;
-	    mc->bmc->chan[0].recv_lun = 0;
-	    mc->bmc->chan[0].protocol = 1; /* IPMB */
-	    mc->bmc->chan[0].session_support = 0; /* Session-less */
-	    mc->bmc->chan[0].vendor_id = 0x001bf2;
-	    mc->bmc->chan[0].aux_info = 0;
-	    mc->bmc->msg_int_type = 0xff;
-	    mc->bmc->event_msg_int_type = 0xff;
-	    rv = 0;
-	} else {
-	    int i;
-
-	    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
-		int protocol = sdr.data[i] & 0xf;
-		
-		if (protocol != 0) {
-		    mc->bmc->chan[i].medium = 1; /* IPMB */
-		    mc->bmc->chan[i].xmit_support = 1;
-		    mc->bmc->chan[i].recv_lun = 0;
-		    mc->bmc->chan[i].protocol = protocol;
-		    mc->bmc->chan[i].session_support = 0; /* Session-less */
-		    mc->bmc->chan[i].vendor_id = 0x001bf2;
-		    mc->bmc->chan[i].aux_info = 0;
-		}
-	    }
-	    mc->bmc->msg_int_type = sdr.data[8];
-	    mc->bmc->event_msg_int_type = sdr.data[9];
-	}
-
-	set_operational(mc);
-    }
-
-    return rv;
-}
-
-static void
-sdr_handler(ipmi_sdr_info_t *sdrs,
-	    int             err,
-	    int             changed,
-	    unsigned int    count,
-	    void            *cb_data)
-{
-    ipmi_mc_t  *mc = (ipmi_mc_t *) cb_data;
-    int        rv;
-
-    /* If we get an error while querying device SDRs, then we just
-       don't have any device SDRs. */
-    if (err && (mc->bmc->state != QUERYING_SENSOR_SDRS)) {
-	rv = err;
-	goto out_err;
-    }
-
-    if ((mc->bmc->state == QUERYING_MAIN_SDRS) 
-	&& (mc->provides_device_sdrs))
-    {
-	/* Got the main SDRs, now get the device SDRs. */
-	mc->bmc->state = QUERYING_SENSOR_SDRS;
-
-	rv = ipmi_sdr_fetch(mc->sdrs, sdr_handler, mc);
-	if (rv)
-	    goto out_err;
-	return;
-    }
-
-    rv = finish_mc_handling(mc);
-    if (rv)
-	goto out_err;
-
-    return;
-
- out_err:
-    if (mc->bmc->setup_done)
-	mc->bmc->setup_done(mc, rv, mc->bmc->setup_done_cb_data);
-    ipmi_close_connection(mc, NULL, NULL);
-}
 
 static void
 got_slave_addr(ipmi_mc_t    *bmc,

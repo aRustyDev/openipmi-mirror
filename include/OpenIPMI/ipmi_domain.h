@@ -160,20 +160,6 @@ void _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 /* Returns if the domain things it has a connection up. */
 int ipmi_domain_con_up(ipmi_domain_t *domain);
 
-/*
- * Channel information for a BMC.
- */
-typedef struct ipmi_chan_info_s
-{
-    unsigned int medium : 7;
-    unsigned int xmit_support : 1;
-    unsigned int recv_lun : 3;
-    unsigned int protocol : 5;
-    unsigned int session_support : 2;
-    unsigned int vendor_id : 24;
-    unsigned int aux_info : 16;
-} ipmi_chan_info_t;
-
 /* Get the number of channels the domain supports. */
 int ipmi_domain_get_num_channels(ipmi_domain_t *domain, int *val);
 

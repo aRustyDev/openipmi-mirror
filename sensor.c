@@ -1065,7 +1065,7 @@ struct dummy_link_s
     dummy_link_t *next;
 };
 
-static int
+int
 ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 			ipmi_mc_t       *source_mc,
 			ipmi_sdr_info_t *sdrs)

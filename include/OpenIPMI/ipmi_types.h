@@ -142,4 +142,20 @@ typedef struct ipmi_event_s
 /* This represents a low-level connection. */
 typedef struct ipmi_con_s ipmi_con_t;
 
+/*
+ * Channel information for a connection.
+ */
+typedef struct ipmi_chan_info_s
+{
+    unsigned int medium : 7;
+    unsigned int xmit_support : 1;
+    unsigned int recv_lun : 3;
+    unsigned int protocol : 5;
+    unsigned int session_support : 2;
+    unsigned int vendor_id : 24;
+    unsigned int aux_info : 16;
+} ipmi_chan_info_t;
+
+#define MAX_IPMI_USED_CHANNELS 8
+
 #endif /* _IPMI_TYPES_H */
