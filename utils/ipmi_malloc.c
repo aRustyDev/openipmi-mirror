@@ -274,16 +274,20 @@ ipmi_debug_free(void *to_free, void **tb)
 	trlr2->prev = trlr->prev;
     } else {
 	alloced_tail = trlr->prev;
-	trlr2 = trlr_from_hdr(alloced_tail);
-	trlr2->next = NULL;
+	if (alloced_tail) {
+	    trlr2 = trlr_from_hdr(alloced_tail);
+	    trlr2->next = NULL;
+	}
     }
     if (trlr->prev) {
 	trlr2 = trlr_from_hdr(trlr->prev);
 	trlr2->next = trlr->next;
     } else {
 	alloced = trlr->next;
-	trlr2 = trlr_from_hdr(alloced);
-	trlr2->prev = NULL;
+	if (alloced) {
+	    trlr2 = trlr_from_hdr(alloced);
+	    trlr2->prev = NULL;
+	}
     }
 
     real_size = dbg_align(hdr->size);

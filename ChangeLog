@@ -10,6 +10,9 @@
 
 	* configure.in: Move to version 1.3.10
 
+	* utils/ipmi_mem_alloc.c: Fixed a bug handling the head and
+	tail elements of the debug malloc list.
+
 2004-09-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/chassis.c: Fixed a problem where the wrong error was being
