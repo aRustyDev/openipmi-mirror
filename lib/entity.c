@@ -975,7 +975,7 @@ presence_changed(ipmi_entity_t *ent,
 	handled = handle_hot_swap_presence(ent, present, event);
 
 	/* When the entity becomes present or absent, fetch or destroy
-	   its FRUs. */
+	   its FRU info. */
 	if (ipmi_entity_get_is_fru(ent)) {
 	    if (present) {
 		ipmi_entity_fetch_frus(ent);
