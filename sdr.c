@@ -41,9 +41,13 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include "opq.h"
+#include "ilist.h"
 
 #define MAX_SDR_FETCH 20
 #define MAX_SDR_FETCH_RETRIES 10
+
+/* Number of outstanding fetch requests we can have out. */
+#define MAX_SDR_FETCH_OUTSTANDING 3
 
 typedef struct sdr_fetch_handler_s
 {
@@ -53,6 +57,21 @@ typedef struct sdr_fetch_handler_s
 } sdr_fetch_handler_t;
 
 enum fetch_state_e { IDLE, FETCHING, HANDLERS };
+
+typedef struct fetch_info_s
+{
+    unsigned int fetch_retry_num;
+
+    ipmi_sdr_info_t *sdrs;
+
+    unsigned int sdr_rec;
+    unsigned int idx;
+    unsigned int offset;
+    unsigned int read_len;
+    unsigned char data[MAX_SDR_FETCH+2];
+
+    ilist_item_t link;
+} fetch_info_t;
 
 struct ipmi_sdr_info_s
 {
@@ -108,15 +127,32 @@ struct ipmi_sdr_info_s
     /* When fetching the data in event-driven mode, these are the
        variables that track what is going on. */
     int                    curr_rec_id;
-    int                    next_rec_id;
-    int                    sdr_data_read; /* Data read so far in the SDR. */
-    int                    reading_header;
-    unsigned int           reservation;
     int                    curr_sdr_num; /* Current array index. */
+    int                    read_offset; /* Next data to read, -1 if
+                                           the header */
+
+    int                    curr_read_rec_id;
+    int                    next_read_rec_id;
+    int                    next_read_idx;
+    int                    next_read_offset; /* -1 if header */
+    int                    read_size;
+
+    unsigned int           reservation;
     int                    working_num_sdrs;
     ipmi_sdr_t             *working_sdrs;
     int                    sdrs_changed;
     int                    fetch_retry_count;
+    int                    sdr_retry_count;
+    int                    fetch_err;
+
+    /* List of fetch info items for an in-progress fetch.  The free
+       list holds fetch structures that are not currently in use, the
+       outstanding list holds ones that have been sent but have not
+       received a response, and the process queue holds one received
+       out of order. */
+    ilist_t *free_fetch;
+    ilist_t *outstanding_fetch;
+    ilist_t *process_fetch;
 
     /* The actual current copy of the SDR repository. */
     unsigned int num_sdrs;
@@ -135,6 +171,30 @@ static inline void sdr_unlock(ipmi_sdr_info_t *sdrs)
     ipmi_unlock(sdrs->sdr_lock);
 }
 
+static void
+free_fetch(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    free(item);
+    ilist_delete(iter);
+}
+
+static void
+cancel_fetch(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    fetch_info_t *info = item;
+
+    info->cancelled = 1;
+    ilist_delete(iter);
+}
+
+static void
+cleanup_fetch_items(ipmi_sdr_info_t *sdrs)
+{
+    ilist_iter(sdrs->free_fetch, free_fetch, NULL);
+    ilist_iter(sdrs->process_fetch, free_fetch, NULL);
+    ilist_iter(sdrs->outstanding_fetch, cancel_fetch, NULL);
+}
+
 int
 ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 		    ipmi_mc_t       *mc,
@@ -144,6 +204,7 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 {
     ipmi_sdr_info_t *sdrs = NULL;
     int             rv;
+    fetch_info_t    *info;
 
     CHECK_MC_LOCK(mc);
 
@@ -174,6 +235,35 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     if (rv)
 	goto out_done;
 
+    sdrs->free_fetch = alloc_ilist();
+    if (!sdrs->free_fetch) {
+	rv = ENOMEM;
+	goto out_done;
+    }
+
+    sdrs->outstanding_fetch = alloc_ilist();
+    if (!sdrs->outstanding_fetch) {
+	rv = ENOMEM;
+	goto out_done;
+    }
+
+    for (i=0; i<MAX_SDR_FETCH_OUTSTANDING; i++) {
+	info = ipmi_mem_alloc(sizeof(*info));
+	info->cancelled = 0;
+	info->sdrs = sdrs;
+	if (!info) {
+	    rv = ENOMEM;
+	    goto out_done;
+	}
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+    }
+
+    sdrs->process_fetch = alloc_ilist();
+    if (!sdrs->process_fetch) {
+	rv = ENOMEM;
+	goto out_done;
+    }
+
     sdrs->sdr_wait_q = opq_alloc(ipmi_domain_get_os_hnd(domain));
     if (! sdrs->sdr_wait_q) {
 	rv = ENOMEM;
@@ -183,6 +273,14 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
  out_done:
     if (rv) {
 	if (sdrs) {
+	    if (sdrs->free_fetch) {
+		ilist_iter(sdrs->free_fetch, free_fetch, NULL);
+		free_ilist(sdrs->free_fetch);
+	    }
+	    if (sdrs->outstanding_fetch)
+		free_ilist(sdrs->outstanding_fetch);
+	    if (sdrs->process_fetch)
+		free_ilist(sdrs->process_fetch);
 	    if (sdrs->sdr_lock)
 		ipmi_destroy_lock(sdrs->sdr_lock);
 	    ipmi_mem_free(sdrs);
@@ -200,7 +298,13 @@ internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs)
     /* We don't have to have a valid ipmi to destroy an SDR, they are
        designed to live after the ipmi has been destroyed. */
 
+    cleanup_fetch_items(sdrs);
+
     sdr_unlock(sdrs);
+
+    free_ilist(sdrs->free_fetch);
+    free_ilist(sdrs->outstanding_fetch);
+    free_ilist(sdrs->process_fetch);
 
     opq_destroy(sdrs->sdr_wait_q);
 
@@ -427,8 +531,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    fetch_complete(sdrs, EBUSY);
 	    goto out;
 	}
-	sdrs->sdr_data_read = 0;
-	sdrs->reading_header = 1;
+	sdrs->read_offset = -1;
 	goto restart_this_sdr;
     }
     if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
@@ -585,12 +688,294 @@ handle_sdr_data(ipmi_mc_t  *mc,
     return;
 }
 
+static void
+process_sdr_info(ipmi_sdr_info_t *sdrs, fetch_info_t *info)
+{
+}
+
+typedef struct process_info_s
+{
+    ipmi_sdr_info_t *sdrs;
+    int processed;
+} process_info_t;
+
+static void
+check_and_process_info(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    process_info_t  *pinfo = cb_data;
+    ipmi_sdr_info_t *sdrs = pinfo->sdrs;
+    fetch_info_t    *info = item;
+
+    if ((info->sdr_rec == sdrs->curr_rec_id)
+	&& (info->offset == sdrs->read_offset))
+    {
+	if (iter)
+	    ilist_delete(&iter);
+	pinfo->processed = 1;
+	process_sdr_info(sdrs, info);
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+    }
+}
+
+typedef struct cancel_same_or_newer_s
+{
+    ipmi_sdr_info_t *sdrs;
+    int             idx;
+} cancel_same_or_newer_t;
+
+static void
+cancel_if_same_or_newer(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    cancel_same_or_newer_t *info = cb_data;
+    fetch_info_t           *finfo = item;
+
+    if (finfo->idx >= info->idx)
+	finfo->fetch_retry_num = -1;
+}
+
+static void
+free_if_same_or_newer(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    cancel_same_or_newer_t *info = cb_data;
+    fetch_info_t           *finfo = item;
+
+    if (finfo->idx >= info->idx) {
+	ilist_delete(&iter);
+	ilist_add_tail(info->sdrs->free_fetch, finfo, &finfo->link);
+    }
+}
+
+static void
+cancel_same_or_newer(ipmi_sdr_info_t *sdrs, int idx)
+{
+    cancel_same_or_newer_t info;
+
+    info.sdrs = sdrs;
+    info.idx = idx;
+    ilist_iter(sdrs->outstanding, cancel_if_same_or_newer, &info);
+    ilist_iter(sdrs->outstanding, free_if_same_or_newer, &info);
+}
+
+static void
+handle_sdr_data(ipmi_mc_t  *mc,
+		ipmi_msg_t *rsp,
+		void       *rsp_data)
+{
+    fetch_info_t    *info = rsp_data;
+    ipmi_sdr_info_t *sdrs = info->sdrs;
+    process_info_t  pinfo;
+
+    sdr_lock(sdrs);
+    if (! ilist_remove_item_from_list(sdrs->outstanding_fetch, info)) {
+	ipmi_log(IPMI_LOG_ERR_SEVERE,
+		 "Got SDR data but the info was not in the"
+		 " outstanding operation list");
+	goto out_unlock;
+    }
+
+    if (sdrs->destroyed) {
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+
+	if (!ilist_empty(sdrs->outstanding_fetch))
+	    goto out_unlock;
+
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "SDR info was destroyed while an operation was in"
+		 " progress(2)");
+	fetch_complete(sdrs, ECANCELED);
+	goto out;
+    }
+
+    if (info->fetch_retry_num != sdrs->fetch_retry_count) {
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+
+	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
+	    if (!ilist_empty(sdrs->outstanding_fetch))
+		goto out_unlock;
+
+	    fetch_complete(sdrs, sdrs->fetch_err);
+	}
+
+	goto out_nextmsg;
+    }
+
+    if (rsp->data[0] == 0x80) {
+	/* Data changed during fetch, retry.  Only do this so many
+           times before giving up. */
+	sdrs->sdr_retry_count++;
+	if (sdrs->sdr_retry_count > MAX_SDR_FETCH_RETRIES) {
+	    /* Cause the operation to be terminated. */
+	    sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
+	    ilist_add_tail(sdrs->free_fetch, info, &info->link);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "To many retries trying to fetch SDRs");
+
+	    sdrs->fetch_err = EBUSY;
+
+	    if (!ilist_empty(sdrs->outstanding_fetch))
+		goto out_unlock;
+
+	    fetch_complete(sdrs, EBUSY);
+	    goto out;
+	}
+
+	/* Cancel any current or newer pending operations. */
+	cancel_same_or_newer(sdrs, info->idx);
+
+	/* Re-start the fetch on the SDR. */
+	sdrs->next_read_offset = -1;
+	sdrs->read_size = -1;
+	sdrs->next_read_rec_id = info->sdr_rec;
+	sdrs->next_read_idx = info->idx-1;
+
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+	goto out_next_msg;
+    }
+
+    if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
+	/* We lost our reservation, restart the operation.  Only do
+           this so many times, in order to guarantee that this
+           completes. */
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+	sdrs->fetch_retry_count++;
+	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "Lost reservation too many times trying to fetch SDRs");
+
+	    sdrs->fetch_err = EBUSY;
+
+	    if (!ilist_empty(sdrs->outstanding_fetch))
+		goto out_unlock;
+
+	    fetch_complete(sdrs, EBUSY);
+	    goto out;
+	} else {
+	    if (sdrs->working_sdrs) {
+		ipmi_mem_free(sdrs->working_sdrs);
+		sdrs->working_sdrs = NULL;
+	    }
+	    rv = start_fetch(sdrs, mc);
+	    if (rv) {
+		/* Cause the fetch to be aborted. */
+		sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "Could not start SDR fetch: %x", rv);
+
+		sdrs->fetch_err = rv;
+
+		if (!ilist_empty(sdrs->outstanding_fetch))
+		    goto out_unlock;
+
+		fetch_complete(sdrs, rv);
+		goto out;
+	    }
+	}
+	goto out_unlock;
+    }
+
+    if (rsp->data_len != info->read_len+3) {
+	/* We got back an invalid amount of data, abort */
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+	sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Got an invalid amount of SDR data: %d, expected %d",
+		 rsp->data_len, info->read_len+3);
+
+	sdrs->fetch_err = EINVAL;
+
+	if (!ilist_empty(sdrs->outstanding_fetch))
+	    goto out_unlock;
+
+	fetch_complete(sdrs, EINVAL);
+	goto out;
+    }
+
+    /* We have a good response */
+
+    /* First handle the info for fetching data. */
+    if (info->offset == 0) {
+	/* We read a header. */
+	sdrs->read_size = rsp->data[7];
+	sdrs->next_read_rec_id = ipmi_get_uint16(rsp->data+1);
+	sdrs->curr_read_rec_id = ipmi_get_uint16(rsp->data+3);
+	sdrs->next_read_offset = info->read_len;
+    }
+
+    /* Now process it for the user. */
+    memcpy(info->data, rsp->data+1, rsp->data_len-1);
+
+    pinfo.processed = 0;
+    check_and_process_info(NULL, info, &pinfo);
+    if (pinfo.processed) {
+	ilist_iter(sdrs->process_fetch, check_and_process_info, &pinfo);
+    } else {
+	ilist_iter_t iter;
+	int          pos;
+	fetch_info_t *ninfo;
+	int          found = 0;
+
+	/* It is not the reponse we are expecting, just throw it onto
+           the queue in order to be handled later. */
+	ilist_init_iter(&iter, sdrs->process_fetch)
+	pos = ilist_last(&iter);
+	while (pos) {
+	    ninfo = ilist_get(&iter);
+	    if ((info->idx > ninfo->idx) || (info->offset > ninfo->offset)) {
+		found = 1;
+		break;
+	    }
+	    pos = ilist_prev(&iter);
+	}
+
+	if (found)
+	    add_list_after(&iter, info, &info->link);
+	else
+	    add_list_before(&iter, info, &info->link);
+    }
+
+ out_nextmsg:
+    while (!ilist_empty(sdrs->free_fetch)) {
+	/* We have some free buffers, see what we can do with them. */
+
+	if (sdrs->next_read_offset == 0)
+	    /* We need to get the SDR header before we can go on. */
+	    break;
+
+	info = ilist_remove_first(sdrs->free_fetch);
+	info->fetch_retry_num = sdrs->fetch_retry_count;
+
+	if (sdrs->next_read_offset == sdrs->read_size) {
+	    /* header is the next read. */
+	    sdrs->curr_read_rec_id = sdrs->next_read_rec_id;
+	    sdrs->next_read_idx++;
+	    sdrs->next_read_offset = 0;
+	    info->read_len = SDR_HEADER_SIZE;
+	} else {
+	    info->read_len = sdrs->read_size - sdrs->next_read_offset;
+	    if (info->read_len > MAX_SDR_FETCH)
+		info->read_len = MAX_SDR_FETCH;
+	    sdrs->next_read_offset += info->read_len;
+	}
+	
+	info->sdr_rec = sdrs->curr_read_rec_id;
+	info->idx = sdrs->next_read_idx;
+	info->offset = sdrs->next_read_offset;
+    }
+
+ out_unlock:
+    sdr_unlock(sdrs);
+ out:
+    return;
+}
+
 static int
 initial_sdr_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
     int             rv;
+    int             i;
+    fetch_info_t    *info;
 
     cmd_msg.data = cmd_data;
     if (sdrs->sensor) {
@@ -605,12 +990,19 @@ initial_sdr_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = SDR_HEADER_SIZE;
+    info = ilist_remove_first(sdrs->free_fetch);
+    info->sdr_rec = sdrs->curr_rec_id;
+    info->offset = 0;
+    info->read_len = SDR_HEADER_SIZE;
     rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-			      handle_sdr_data, sdrs);
+			      handle_sdr_data, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "initial_sdr_fetch: Couldn't send first SDR fetch: %x", rv);
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	fetch_complete(sdrs, rv);
+    } else {
+	ilist_add_tail(sdrs->outstanding_fetch, info, &info->link);
     }
     return rv;
 }
@@ -817,11 +1209,14 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    sdrs->next_rec_id = 0;
     sdrs->curr_rec_id = 0;
     sdrs->curr_sdr_num = 0;
-    sdrs->sdr_data_read = 0;
-    sdrs->reading_header = 1; /* First thing is to read the header. */
+    sdrs->read_offset = -1; /* First thing is to read the header. */
+
+    sdrs->next_read_rec_id = 0;
+    sdrs->curr_read_rec_id = 0;
+    sdrs->next_read_idx = 0;
+    sdrs->next_read_offset = -1; /* First thing is to read the header. */
 
     if (sdrs->supports_reserve_sdr) {
 	/* Now get the reservation. */
@@ -865,6 +1260,7 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     sdrs->fetch_state = FETCHING;
     sdrs->sdrs_changed = 0;
     sdrs->fetch_retry_count = 0;
+    sdrs->sdr_retry_count = 0;
 
     /* Get a reservation first. */
     cmd_msg.data = cmd_data;
