@@ -3499,7 +3499,7 @@ ipmi_ui_setup_done(ipmi_mc_t *mc,
 	os_hnd_timer_id_t *timer = NULL;
 	struct timeval    timeout;
 
-	ui_log("Could not set up IPMI connection due to error 0x%x, retrying",
+	ui_log("Could not set up IPMI connection due to error 0x%x, retrying\n",
 	       err);
 
 	/* Start a timer to run the reconnection in 1 second.  We run
