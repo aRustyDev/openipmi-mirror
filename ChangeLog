@@ -1,5 +1,9 @@
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
+	* ui/ui.c: Turn off nonblocking mode on the write fd.
+
+2004-03-25 Corey Minyard <cminyard@mvista.com> 
+
 	* configure.in: Move to version 1.2.22.
 
 	* entity.c: Always rescan FRU info on an entity presence change
