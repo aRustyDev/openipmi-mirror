@@ -1096,9 +1096,9 @@ ipmi_domain_add_ipmb_ignore_range(ipmi_domain_t *domain,
 
 typedef struct mc_upd_info_s
 {
-    int           added;
-    ipmi_domain_t *domain;
-    ipmi_mc_t     *mc;
+    enum ipmi_update_e op;
+    ipmi_domain_t      *domain;
+    ipmi_mc_t          *mc;
 } mc_upd_info_t;
 
 static void
@@ -1107,10 +1107,7 @@ iterate_mc_upds(ilist_iter_t *iter, void *item, void *cb_data)
     mc_upd_info_t        *info = cb_data;
     ipmi_domain_mc_upd_t *id = item;
 
-    if (info->added)
-        id->handler(IPMI_ADDED, info->domain, info->mc, id->cb_data);
-    else
-        id->handler(IPMI_DELETED, info->domain, info->mc, id->cb_data);
+    id->handler(info->op, info->domain, info->mc, id->cb_data);
 }
 
 static int
@@ -1128,7 +1125,7 @@ add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     else {
 	mc_upd_info_t info;
 	info.domain = domain;
-	info.added = 1;
+	info.op = IPMI_ADDED;
 	info.mc = mc;
 	ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
     }
@@ -1202,7 +1199,7 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     if (found) {
 	mc_upd_info_t info;
 	info.domain = domain;
-	info.added = 0;
+	info.op = IPMI_CHANGED;
 	info.mc = mc;
 	ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
     }
@@ -1724,20 +1721,37 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		    goto out;
 		}
 
+		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
+		if (rv) {
+		    /* If we couldn't handle the device data, just clean
+		       it up */
+		    _ipmi_cleanup_mc(mc);
+		    goto next_addr;
+		}
+
 		rv = add_mc_to_domain(domain, mc);
 		if (rv) {
 		    _ipmi_cleanup_mc(mc);
 		    goto next_addr;
 		}
-	    }
+	    } else {
+		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
+		if (rv) {
+		    /* If we couldn't handle the device data, just clean
+		       it up */
+		    _ipmi_cleanup_mc(mc);
+		} else {
+		    mc_upd_info_t info;
 
-	    rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
-	    if (rv) {
-		/* If we couldn't handle the device data, just clean
-                   it up */
-		_ipmi_cleanup_mc(mc);
-	    } else
-		_ipmi_mc_handle_new(mc);
+		    _ipmi_mc_handle_new(mc);
+
+		    info.domain = domain;
+		    info.op = IPMI_CHANGED;
+		    info.mc = mc;
+		    ilist_iter(domain->mc_upd_handlers, iterate_mc_upds,
+			       &info);
+		}
+	    }
 	} else {
 	    /* Periodically check the MCs. */
 	    _ipmi_mc_check_mc(mc);
@@ -1751,7 +1765,14 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 	if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	    || (info->missed_responses >= MAX_MC_MISSED_RESPONSES))
 	{
-	    _ipmi_cleanup_mc(mc);
+	    if (_ipmi_cleanup_mc(mc) == IPMI_CHANGED) {
+		mc_upd_info_t info;
+
+		info.domain = domain;
+		info.op = IPMI_CHANGED;
+		info.mc = mc;
+		ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
+	    }
 	    goto next_addr;
 	} else {
 	    /* Try again after a second. */

@@ -366,7 +366,7 @@ call_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
     ilist_delete(iter);
 }
 
-void
+enum ipmi_update_e
 _ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
     int           i;
@@ -445,8 +445,10 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_sel_destroy(mc->sel, NULL, NULL);
 
 	ipmi_mem_free(mc);
+	return IPMI_DELETED;
     } else {
 	mc->active = 0;
+	return IPMI_CHANGED;
     }
 }
 

@@ -168,8 +168,9 @@ int _ipmi_create_mc(ipmi_domain_t *domain,
 		    unsigned int  addr_len,
 		    ipmi_mc_t     **new_mc);
 
-/* Destroy an MC. */
-void _ipmi_cleanup_mc(ipmi_mc_t *mc);
+/* Destroy an MC.  This will return IPMI_DELETED if it removed the MC
+   from the domain, or IPMI_CHANGED if it made the MC inactive. */
+enum ipmi_update_e _ipmi_cleanup_mc(ipmi_mc_t *mc);
 
 #if 0
 /* FIXME - need to handle this somehow. */

@@ -1,3 +1,12 @@
+2004-03-12 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Changed the return value
+	from _ipmi_mc_cleanup() to return if the MC was deleted or just
+	made inactive.
+
+	* lib/domain.c: Call the changed handlers when an MC's info or
+	state changes.
+
 2004-03-11 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.19.
