@@ -1,3 +1,20 @@
+2005-01-23 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sel.c: Fixed a bug where the SEL lock was being held in
+	the SEL fetch done callback.
+
+2005-01-20 Corey Minyard <cminyard@mvista.com> 
+
+	* config: No changes to any checked-in files, but rerun
+	libtoolize, autoconf, and automake to move to the newest version.
+
+	* configure.in: Allow the SNMP libraries and compile flags to be
+	hard-coded on the configure command line.
+
+	* lib/domain.c: Fixed a problem with the type in a log.
+	
+	* configure.in: Move to version 1.4.9.
+
 2005-01-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:

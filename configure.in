@@ -3,7 +3,7 @@ AC_CANONICAL_TARGET
 OPENIPMI_PKG_NAME=OpenIPMI
 OPENIPMI_VERSION_MAJOR=1
 OPENIPMI_VERSION_MINOR=4
-OPENIPMI_VERSION_RELEASE=8
+OPENIPMI_VERSION_RELEASE=9
 OPENIPMI_VERSION_EXTRA=
 AM_INIT_AUTOMAKE(OpenIPMI, ${OPENIPMI_VERSION_MAJOR}.${OPENIPMI_VERSION_MINOR}.${OPENIPMI_VERSION_RELEASE}${OPENIPMI_VERSION_EXTRA})
 
@@ -22,6 +22,16 @@ AC_ARG_WITH(ucdsnmp,
       SNMPLIBS="-L$withval/lib $SNMPLIBS"
       tryucdsnmp=yes
     fi,
+)
+
+AC_ARG_WITH(snmpflags,
+[  --with-snmpflags=flags          Set the flags to compile with SNMP.],
+    CPPFLAGS="$withval $CPPFLAGS"
+)
+
+AC_ARG_WITH(snmplibs,
+[  --with-snmplibs=libs            Set the libraries to link with SNMP.],
+    SNMPLIBS="$withval",
 )
 
 # If UCD SNMP requires OpenSSL, this tells where to find the crypto lib
