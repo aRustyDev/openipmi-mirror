@@ -1,3 +1,11 @@
+2004-03-09 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_motorola_mxp.c: Don't create the "healthy" sensor for
+	AMC boards.
+
+	* lib/oem_motorola_mxp.c: Clear our the right variable after the
+	allocation of info->con_ch_info.
+
 2004-03-02 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fixed a bug where incoming SNMP traps were
