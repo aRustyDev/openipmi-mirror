@@ -14,6 +14,9 @@
 	* lib/oem_atca.c: Set address controls to be ignored if the entity
 	is not present.
 
+	* lib/sensor.c: Fix a problem with handling sensor state fetches
+	that didn't have optional bytes.
+
 2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Added a physical slot number attribute for
