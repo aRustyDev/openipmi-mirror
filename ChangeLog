@@ -1,3 +1,8 @@
+2004-05-17 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/posix_os_hnd.c, lib/posix_threaded_os_hnd.c: Fix the os
+	handlers to call posix_vlog() properly.
+
 2004-05-14 Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* lib/oem_intel.c: Added support for the alarm panel on an Intel

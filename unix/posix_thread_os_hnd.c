@@ -47,12 +47,7 @@
 #include <string.h>
 
 #include <OpenIPMI/ipmi_int.h>
-
-/* This must be provided by the user. */
-void (*ipmi_threaded_posix_vlog)(char *format,
-				 enum ipmi_log_type_e log_type,
-				 va_list ap);
-
+#include <OpenIPMI/ipmi_posix.h>
 
 struct os_hnd_fd_id_s
 {
@@ -254,8 +249,7 @@ sposix_log(os_handler_t         *handler,
     va_list ap;
 
     va_start(ap, format);
-    if (ipmi_threaded_posix_vlog)
-	ipmi_threaded_posix_vlog(format, log_type, ap);
+    posix_vlog(format, log_type, ap);
     va_end(ap);
 }
 
@@ -265,8 +259,7 @@ sposix_vlog(os_handler_t         *handler,
 	    char                 *format,
 	    va_list              ap)
 {
-    if (ipmi_threaded_posix_vlog)
-	ipmi_threaded_posix_vlog(format, log_type, ap);
+    posix_vlog(format, log_type, ap);
 }
 
 struct os_hnd_lock_s

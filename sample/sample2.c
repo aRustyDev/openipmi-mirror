@@ -340,7 +340,7 @@ main(int argc, const char *argv[])
 }
 
 void
-ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     int do_nl = 1;
 
