@@ -58,6 +58,8 @@ make
 ###################################################
 rm -rf %{buildroot}
 make DESTDIR=%{buildroot} install
+ls -l %{buildroot}%{_infodir}
+rm -f %{buildroot}%{_infodir}/dir
 
 ###################################################
 %files
@@ -83,7 +85,7 @@ make DESTDIR=%{buildroot} install
 %{_includedir}/OpenIPMI
 %{_libdir}/*.a
 %{_libdir}/pkgconfig
-%doc %{_infodir}/*
+%doc %{_infodir}/OpenIPMI*
 
 ###################################################
 %files ui
