@@ -1,3 +1,11 @@
+2005-01-13 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sel.c: Fixed a bug where if the reservation was lost
+	fetching a SEL, it would not fetch anything from the SEL until a
+	new event was added.
+
+	* configure.in: Move to version 1.3.17.
+
 2004-12-29 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Added printing of if the sensor/control should be

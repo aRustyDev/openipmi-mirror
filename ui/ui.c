@@ -3116,7 +3116,7 @@ dump_fru_str(ipmi_fru_t *fru,
 	return rv;
     }
 
-    display_pad_out("  %s: %s\n", str, buf);
+    display_pad_out("  %s(%d): %s\n", str, len, buf);
     return 0;
 }
 
@@ -3158,8 +3158,9 @@ dump_fru_custom_str(ipmi_fru_t *fru,
     len = sizeof(buf);
     rv = gstr(fru, num, buf, &len);
     if (rv) {
-	display_pad_out("  Error fetching string for %s custom %d: %x\n",
-			str, num, rv);
+	if (rv != ENOSYS)
+	    display_pad_out("  Error fetching string for %s custom %d: %x\n",
+			    str, num, rv);
 	return rv;
     }
 
