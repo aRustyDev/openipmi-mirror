@@ -3015,6 +3015,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	found = infos.found + i;
 	if (found->found)
 	    continue;
+	if (!found->ent)
+	    continue;
 
 	/* Call the update handler list. */
 	info.op = IPMI_CHANGED;
@@ -3046,6 +3048,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     for (i=0; i<old_infos->next; i++) {
 	found = old_infos->found + i;
 	if (found->found)
+	    continue;
+	if (!found->ent)
 	    continue;
 
 	cleanup_entity(found->ent);

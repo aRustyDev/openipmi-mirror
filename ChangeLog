@@ -8,6 +8,8 @@
 
 	* configure.in: Move to version 1.3.9.
 
+	* lib/entity.c: Check for null entities when scanning SDRs.
+
 2004-06-03 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.3.8.
