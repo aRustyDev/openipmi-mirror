@@ -1,3 +1,15 @@
+2005-03-23 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/mxp.h: Fixed the license to be LGPL, as
+	intended.
+
+	* configure.in: Move to version 1.3.18.
+
+2005-03-11 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca.c: Change the FRU data reading to try the ECN
+	compliant FRU ID 254 first.
+
 2005-01-13 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sel.c: Fixed a bug where if the reservation was lost
