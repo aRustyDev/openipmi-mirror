@@ -356,6 +356,7 @@ typedef struct amc_info_s
     ipmi_control_t *hw_version;
     ipmi_control_t *fw_version;
     ipmi_control_t *fpga_version;
+    ipmi_control_t *slot_ga;
     ipmi_control_t *last_reset_reason;
     ipmi_control_t *chassis_id;
 } amc_info_t;
@@ -6543,6 +6544,8 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->fw_version);
     if (info->fpga_version)
 	ipmi_control_destroy(info->fpga_version);
+    if (info->slot_ga)
+	ipmi_control_destroy(info->slot_ga);
     if (info->chassis_id)
 	ipmi_control_destroy(info->chassis_id);
 
@@ -6718,6 +6721,19 @@ amc_board_handler(ipmi_mc_t *mc)
 			      NULL,
 			      amc_fpga_version_get,
 			      &info->fpga_version);
+    if (rv)
+	goto out_err;
+
+    /* Slot gegraphic address */
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_SLOT_GA_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Geog Addr",
+			      1,
+			      NULL,
+			      slot_ga_get,
+			      &info->slot_ga);
     if (rv)
 	goto out_err;
 

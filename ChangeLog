@@ -1,3 +1,7 @@
+2004-04-07 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_motorola_mxp.c: Added a slot GA sensor to the AMC.
+
 2004-04-02 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c, lib/sensor.c, lib/control.c: Fixed a rather nasty
