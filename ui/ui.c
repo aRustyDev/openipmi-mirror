@@ -79,8 +79,10 @@ command_t commands;
 ipmi_domain_id_t domain_id;
 
 #define MAX_DOMAINS 20
+#define MAX_DOMAIN_NAME 30
 ipmi_domain_id_t domains[MAX_DOMAINS];
 int domain_initialized[MAX_DOMAINS];
+char domain_names[MAX_DOMAINS][MAX_DOMAIN_NAME];
 
 extern os_handler_t ipmi_ui_cb_handlers;
 ipmi_pef_t *pef;
@@ -5951,6 +5953,15 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	}
     }
 
+    if (num_parms < 2) {
+	cmd_win_out("Not enough parms given\n");
+	return 0;
+    }
+
+    strncpy(domain_names[dnum], parms[0], MAX_DOMAIN_NAME-1);
+    domain_names[dnum][MAX_DOMAIN_NAME-1] = '\0';
+    curr_parm++;
+
     rv = ipmi_parse_args(&curr_parm, num_parms, argv, &con_parms[set]);
     if (rv) {
 	cmd_win_out("First connection parms are invalid\n");
@@ -6062,6 +6073,20 @@ set_domain_cmd(char *cmd, char **toks, void *cb_data)
 
     domain_id = domains[dn];
 
+    return 0;
+}
+
+static int
+domains_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned int dnum;
+
+    display_pad_clear();
+    display_pad_out("Domains:\n");
+    for (dnum=0; dnum<MAX_DOMAINS; dnum++) {
+	if (! ipmi_domain_id_is_invalid(&(domains[dnum])))
+	    display_pad_out("  %2.2d %s\n", dnum, domain_names[dnum]);
+    }
     return 0;
 }
 
@@ -6219,11 +6244,13 @@ static struct {
     { "check_presence", presence_cmd,
       " - Check the presence of entities" },
     { "new_domain", new_domain_cmd,
-      " parms - Open a connection to a new domain" },
+      " <domain name> <parms...> - Open a connection to a new domain" },
     { "close_domain", close_domain_cmd,
       " <num> - close the given domain number" },
     { "set_domain", set_domain_cmd,
       " <num> - Use the given domain number" },
+    { "domains", domains_cmd,
+      " - List all the domains" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
@@ -6802,9 +6829,11 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 
     domains[dnum] = ipmi_domain_convert_to_id(domain);
     if (!first_init) {
+	strcpy(domain_names[dnum], "first");
 	domain_id = domains[dnum];
 	first_init = 1;
     }
+    ipmi_domain_set_name(domain, domain_names[dnum]);
 
     domain_initialized[dnum] = 1;
 
