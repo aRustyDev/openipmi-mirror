@@ -3254,6 +3254,11 @@ atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
     case 34:
 	inst = 0x60;
 	break;
+
+    case 0xa0:
+	/* These instances should all be set to 0x60 */
+	inst = 0x60;
+	break;
     }
 
     *instance = (*instance & 0x80) | (inst & 0x7f);
@@ -3318,6 +3323,8 @@ atca_register_fixups(void)
     ipmi_register_oem_handler(0x000157, 0x0841,
 			      misc_sdrs_fixup_reg, NULL, NULL);
     ipmi_register_oem_handler(0x000157, 0x080a,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000e48, 0x1041,
 			      misc_sdrs_fixup_reg, NULL, NULL);
 }
 
