@@ -385,6 +385,12 @@ open_lan_fd(int pf_family)
 
     /* Bind is not necessary, we don't care what port we are. */
 
+    /* We want it to be non-blocking. */
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+	close(fd);
+	fd = -1;
+    }
+
     return fd;
 }
 
@@ -1276,6 +1282,7 @@ data_handler(int            fd,
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
 		    &from_len);
     if (len < 0)
+	/* Got an error, probably no data, just return. */
 	goto out;
 
     if (DEBUG_RAWMSG) {

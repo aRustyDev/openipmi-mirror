@@ -1,7 +1,19 @@
+2005-03-17 Corey Minyard <cminyard@mvista.com>
+
+	* lib/fru.c: Fixed an off-by-one problem when writing FRU data.
+
+2005-03-16 Corey Minyard <cminyard@mvista.com>
+
+	* lib/fru.c: Added IPMI_REQUEST_DATA_LENGTH_INVALID_CC to the
+	list of errors that means the FRU fetch was too big and we should
+	back off the fetch size.
+
 2005-03-03 Corey Minyard <cminyard@mvista.com>
 
 	* sample/ipmicmd.c: Fixed some memory sloppiness that was causing
 	segvs with test_lat.
+
+	* lib/ipmi_lan.c: Converted to socket to be non-blocking.
 
 2005-02-28 Corey Minyard <cminyard@mvista.com>
 
