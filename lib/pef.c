@@ -1593,6 +1593,7 @@ int ipmi_pef_get_config(ipmi_pef_t             *pef,
     pefc->done = done;
     pefc->cb_data = cb_data;
     pefc->my_pef = pef;
+    pefc->lock_supported = 1; /* Assume it works */
 
     /* First grab the lock */
     data[0] = 1; /* Set in progress. */

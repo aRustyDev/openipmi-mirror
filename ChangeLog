@@ -1,3 +1,31 @@
+2004-10-18 Corey Minyard <cminyard@mvista.com> 
+
+	* oem_intel.c: Move the alarm control to the 0.20 MC, handle
+	automatic scanning of the 0.c0 MC when the system power is
+	applied.
+
+	* configure.in: Move to version 1.3.12
+
+2004-10-07 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/strings.c: backport some fixes from 1.4.
+	* lib/sdrs.c: ditto
+	* lib/domain.c: ditto
+	* lib/event.c: ditto
+	* lib/sel.c: ditto
+	* lib/pef.c: ditto
+	* lib/lanparm.c: ditto
+	* lib/ipmi_utils.c: ditto
+
+2004-09-30 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Move to version 1.3.11
+
+2004-09-25 Chetan Hiremath <chetan.hiremath@intel.com> 
+
+	* lib/ipmi_smi.c: Use the proper address on received commands and
+	async events.
+
 2004-09-09 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Return the proper callback data for the sel_reread

@@ -47,7 +47,7 @@ static char *hysteresis_support_types[] =
 char *
 ipmi_get_hysteresis_support_string(unsigned int val)
 {
-    if (val > NUM_HYSTERESIS_SUPPORT_TYPES)
+    if (val >= NUM_HYSTERESIS_SUPPORT_TYPES)
 	return "invalid";
     return hysteresis_support_types[val];
 }
@@ -63,7 +63,7 @@ static char *threshold_access_support_types[] =
 char *
 ipmi_get_threshold_access_support_string(unsigned int val)
 {
-    if (val > NUM_THRESHOLD_ACCESS_SUPPORT_TYPES)
+    if (val >= NUM_THRESHOLD_ACCESS_SUPPORT_TYPES)
 	return "invalid";
     return threshold_access_support_types[val];
 }
@@ -79,7 +79,7 @@ static char *event_support_types[] =
 char *
 ipmi_get_event_support_string(unsigned int val)
 {
-    if (val > NUM_EVENT_SUPPORT_TYPES)
+    if (val >= NUM_EVENT_SUPPORT_TYPES)
 	return "invalid";
     return event_support_types[val];
 }
@@ -133,7 +133,7 @@ static char *sensor_types[] =
 char *
 ipmi_get_sensor_type_string(unsigned int val)
 {
-    if (val > NUM_SENSOR_TYPES)
+    if (val >= NUM_SENSOR_TYPES)
 	return "invalid";
     return sensor_types[val];
 }
@@ -161,7 +161,7 @@ ipmi_get_event_reading_type_string(unsigned int val)
     if (val == IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC)
 	return "sensor specific";
 
-    if (val > NUM_EVENT_READING_TYPES)
+    if (val >= NUM_EVENT_READING_TYPES)
 	return "invalid";
     return event_reading_types[val];
 }
@@ -180,7 +180,7 @@ static char *rate_unit_types[] =
 char *
 ipmi_get_rate_unit_string(unsigned int val)
 {
-    if (val > NUM_RATE_UNIT_TYPES)
+    if (val >= NUM_RATE_UNIT_TYPES)
 	return "invalid";
     return rate_unit_types[val];
 }
@@ -283,7 +283,7 @@ static char *unit_types[] =
 char *
 ipmi_get_unit_type_string(unsigned int val)
 {
-    if (val > NUM_UNIT_TYPES)
+    if (val >= NUM_UNIT_TYPES)
 	return "invalid";
     return unit_types[val];
 }
@@ -301,7 +301,7 @@ static char *threshold_types[] =
 char *
 ipmi_get_threshold_string(unsigned int val)
 {
-    if (val > NUM_THRESHOLD_TYPES)
+    if (val >= NUM_THRESHOLD_TYPES)
 	return "invalid";
     return threshold_types[val];
 }
@@ -315,7 +315,7 @@ static char *value_dir_types[] =
 char *
 ipmi_get_value_dir_string(unsigned int val)
 {
-    if (val > NUM_VALUE_DIR_TYPES)
+    if (val >= NUM_VALUE_DIR_TYPES)
 	return "invalid";
     return value_dir_types[val];
 }
@@ -329,7 +329,7 @@ static char *event_dir_types[] =
 char *
 ipmi_get_event_dir_string(unsigned int val)
 {
-    if (val > NUM_EVENT_DIR_TYPES)
+    if (val >= NUM_EVENT_DIR_TYPES)
 	return "invalid";
     return event_dir_types[val];
 }
@@ -388,7 +388,7 @@ static char *entity_id_types[] =
 char *
 ipmi_get_entity_id_string(unsigned int val)
 {
-    if (val > NUM_ENTITY_ID_TYPES)
+    if (val >= NUM_ENTITY_ID_TYPES)
 	return "invalid";
     return entity_id_types[val];
 }
@@ -700,7 +700,7 @@ static char *control_types[] =
 char *
 ipmi_get_control_type_string(unsigned int val)
 {
-    if (val > NUM_CONTROL_TYPES)
+    if (val >= NUM_CONTROL_TYPES)
 	return "invalid";
     return control_types[val];
 }
@@ -719,7 +719,7 @@ static char *colors[] =
 char *
 ipmi_get_color_string(unsigned int val)
 {
-    if (val > NUM_COLORS)
+    if (val >= NUM_COLORS)
 	return "invalid";
     return colors[val];
 }

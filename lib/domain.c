@@ -534,6 +534,7 @@ cleanup_domain(ipmi_domain_t *domain)
 	mc_ipmb_scan_info_t *item;
 	while (domain->bus_scans_running) {
 	    item = domain->bus_scans_running;
+	    domain->bus_scans_running = item->next;
 	    ipmi_lock(item->lock);
 	    if (item->timer_running) {
 		if (item->os_hnd->stop_timer(item->os_hnd, item->timer)) {
@@ -542,7 +543,6 @@ cleanup_domain(ipmi_domain_t *domain)
 		    item = NULL;
 		}
 	    }
-	    domain->bus_scans_running = item->next;
 	    if (item) {
 		ipmi_unlock(item->lock);
 		item->os_hnd->free_timer(item->os_hnd, item->timer);
