@@ -1,3 +1,11 @@
+2004-06-23 Michael McMaster <Michael_McMaster@Xiotech.com>
+
+	* lib/mc.c: Initialize info->err in ipmi_mc_reread_sel().
+
+2004-06-22 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca.c: Fix a race with deleting an MC.
+
 2004-06-18 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca.c: Add setting the entity id string into the entity
