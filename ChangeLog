@@ -5,6 +5,12 @@
 
 	* configure.in: Move to version 1.2.17.
 
+	* lib/sensor.c: Fixed the range check in ipmi_sensor_pointer_cb().
+
+	* lib/control.c: Fixed the range check in ipmi_control_pointer_cb().
+
+	* configure.in: Move to version 1.2.18.
+
 2004-03-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
