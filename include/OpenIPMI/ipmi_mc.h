@@ -207,4 +207,7 @@ int ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
 			     void           *cb_data);
 #endif
 
+int _ipmi_mc_init(void);
+void _ipmi_mc_shutdown(void);
+
 #endif /* _IPMI_MC_H */

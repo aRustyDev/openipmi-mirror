@@ -617,7 +617,8 @@ ipmi_init(os_handler_t *handler)
 	seq_lock = NULL;
     }
     ipmi_os_handler = handler;
-    ipmi_domain_init();
+    _ipmi_domain_init();
+    _ipmi_mc_init();
     return 0;
 
  out_err:
@@ -629,7 +630,8 @@ ipmi_init(os_handler_t *handler)
 void
 ipmi_shutdown(void)
 {
-    ipmi_domain_shutdown();
+    _ipmi_domain_shutdown();
+    _ipmi_mc_shutdown();
     if (global_lock)
 	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
     global_lock = NULL;
