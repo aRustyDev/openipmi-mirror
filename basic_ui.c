@@ -146,7 +146,7 @@ main(int argc, char *argv[])
 	} else if (strcmp(argv[curr_arg], "straight") == 0) {
 	    authtype = IPMI_AUTHTYPE_STRAIGHT;
 	} else if (num_addr == 1) {
-	    if (argc < 8) {
+	    if (argc < 10) {
 		fprintf(stderr, "Not enough arguments\n");
 		exit(1);
 	    }

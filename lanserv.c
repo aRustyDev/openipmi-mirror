@@ -340,7 +340,7 @@ get_bool(char **tokptr, unsigned int *rval, char **err)
 	*rval = 1;
     else if (strcasecmp(tok, "false") == 0)
 	*rval = 0;
-    if (strcasecmp(tok, "on") == 0)
+    else if (strcasecmp(tok, "on") == 0)
 	*rval = 1;
     else if (strcasecmp(tok, "off") == 0)
 	*rval = 0;

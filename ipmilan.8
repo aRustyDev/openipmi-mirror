@@ -145,10 +145,12 @@ If this is not specified, then the GUID command is not supported.
 Blank lines and lines starting with `#' are ignored.
 
 .SH SECURITY
-ser2net uses the tcp wrappers interface to implement host-based security.
-See hosts_access(5) for a description of the file setup.  Two daemons are
-used by ser2net, "ser2net" is for the data ports and "ser2net-control"
-is for the control ports.
+.BR ipmilan
+implements normal IPMI security.  The default is no access for anyone,
+so the default is pretty safe, but be careful what you add, because
+this is access to control your box.  "straight" and "none"
+authorizations are not recommended, you should probably stick with md2
+or md5.
 
 .SH "SIGNALS"
 .TP 0.5i

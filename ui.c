@@ -223,6 +223,7 @@ display_pad_refresh(void)
 void
 display_pad_clear(void)
 {
+    display_pad_top_line = 0;
     if (full_screen) {
 	werase(display_pad);
 	wmove(display_pad, 0, 0);
@@ -2196,7 +2197,7 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
     info->states = NULL;
 
     if (get_uchar(toks, &global, "global rearm"))
-	return 0;
+	goto out_err;
     info->global = global;
 
     if (!global) {
@@ -2204,7 +2205,7 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
 	if (!info->states) {
 	    ipmi_mem_free(info);
 	    cmd_win_out("Out of memory\n");
-	    return 0;
+	    goto out_err;
 	}
 
 	ipmi_event_state_init(info->states);
@@ -2212,7 +2213,7 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
 	enptr = strtok_r(NULL, " \t\n", toks);
 	if (!enptr) {
 	    cmd_win_out("No assertion mask given\n");
-	    return 0;
+	    goto out_err;
 	}
 	for (i=0; enptr[i]!='\0'; i++) {
 	    if (enptr[i] == '1')
@@ -2221,7 +2222,7 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
 		ipmi_discrete_event_clear(info->states, i, IPMI_ASSERTION);
 	    else {
 		cmd_win_out("Invalid assertion value\n");
-		return 0;
+		goto out_err;
 	    }
 	}
     
@@ -2237,7 +2238,7 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
 		ipmi_discrete_event_clear(info->states, i, IPMI_DEASSERTION);
 	    else {
 		cmd_win_out("Invalid deassertion value\n");
-		return 0;
+		goto out_err;
 	    }
 	}
     }
@@ -2245,6 +2246,14 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
     rv = ipmi_sensor_pointer_cb(curr_sensor_id, rearm, info);
     if (rv) {
 	cmd_win_out("Unable to get sensor pointer: 0x%x\n", rv);
+	goto out_err;
+    }
+    return 0;
+
+ out_err:
+    if (info) {
+	if (info->states)
+	    ipmi_mem_free(info->states);
 	ipmi_mem_free(info);
     }
     return 0;
@@ -2267,11 +2276,11 @@ typedef struct mccmd_info_s
     int           found;
 } mccmd_info_t;
 
-void mc_handler(ipmi_mc_t *mc,
-		   void      *cb_data)
+void mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
     unsigned char vals[4];
 
+    display_pad_clear();
     display_pad_out("MC (%x %x) - %s\n",
 		    ipmi_mc_get_channel(mc),
 		    ipmi_mc_get_address(mc),
@@ -3088,6 +3097,20 @@ quit_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static int
+display_win_cmd(char *cmd, char **toks, void *cb_data)
+{
+    curr_win = DISPLAY_WIN_SCROLL;
+    return 0;
+}
+
+static int
+log_win_cmd(char *cmd, char **toks, void *cb_data)
+{
+    curr_win = LOG_WIN_SCROLL;
+    return 0;
+}
+
 static int help_cmd(char *cmd, char **toks, void *cb_data);
 
 static struct {
@@ -3149,6 +3172,10 @@ static struct {
       " - leave the program" },
     { "reconnect",  reconnect_cmd,
       " - scan an IPMB to add or remove it" },
+    { "display_win",  display_win_cmd,
+      " - Sets the display window (left window) for scrolling" },
+    { "log_win",  log_win_cmd,
+      " - Sets the log window (right window) for scrolling" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
