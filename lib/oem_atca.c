@@ -2959,6 +2959,7 @@ alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 				0,
 				0,
 				0,
+				IPMI_FRU_FTR_MULTI_RECORD_AREA_MASK,
 				shelf_fru_fetched,
 				info,
 				&info->shelf_fru);
@@ -3373,6 +3374,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 				0,
 				0,
 				0,
+				IPMI_FRU_FTR_MULTI_RECORD_AREA_MASK,
 				shelf_fru_fetched,
 				info,
 				&info->shelf_fru);
