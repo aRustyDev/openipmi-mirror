@@ -6489,6 +6489,33 @@ amc_fpga_version_get(ipmi_control_t                 *control,
 }
 
 static int
+amc_slot_ga_get(ipmi_control_t                 *control,
+		ipmi_control_identifier_val_cb handler,
+		void                           *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+    control_info->min_rsp_length = 6;
+    control_info->data_off = 5;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static int
 amc_last_reset_reason_get(ipmi_control_t                 *control,
 			  ipmi_control_identifier_val_cb handler,
 			  void                           *cb_data)
@@ -6732,7 +6759,7 @@ amc_board_handler(ipmi_mc_t *mc)
 			      "Geog Addr",
 			      1,
 			      NULL,
-			      slot_ga_get,
+			      amc_slot_ga_get,
 			      &info->slot_ga);
     if (rv)
 	goto out_err;
