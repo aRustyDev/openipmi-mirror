@@ -865,16 +865,25 @@ start_fetch(void *cb_data, int shutdown)
     }
 }
 
+/* We have to have this because the allocate element can go away (the
+   operation can complete) before returning to the user. */
+typedef struct sel_get_cb_s
+{
+    sel_fetch_handler_t *elem;
+    int                 rv;
+} sel_get_cb_t;
+
 static void
 ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 {
-    sel_fetch_handler_t *elem = cb_data;
+    sel_get_cb_t        *info = cb_data;
+    sel_fetch_handler_t *elem = info->elem;
     ipmi_sel_info_t     *sel = elem->sel;
 
     if (!ipmi_mc_sel_device_support(mc)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_sel_get: No support for the system event log");
-	elem->rv = ENOSYS;
+	info->rv = ENOSYS;
 	return;
     }
 
@@ -888,7 +897,7 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	sel->sels_changed = 0;
 
 	if (!opq_new_op(sel->opq, start_fetch, elem, 0)) {
-	    elem->rv = ENOMEM;
+	    info->rv = ENOMEM;
 	    goto out_unlock;
 	}
 	elem->next = NULL;
@@ -899,7 +908,7 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	elem->next = sel->fetch_handlers;
 	sel->fetch_handlers = elem;
     } else {
-	elem->rv = EEXIST;
+	info->rv = EEXIST;
     }
 
  out_unlock:
@@ -911,6 +920,7 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
 	     ipmi_sels_fetched_t handler,
 	     void                *cb_data)
 {
+    sel_get_cb_t        info;
     sel_fetch_handler_t *elem;
     int                 rv;
 
@@ -925,10 +935,12 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
     elem->cb_data = cb_data;
     elem->sel = sel;
     elem->rv = 0;
+    info.elem = elem;
+    info.rv = 0;
 
-    rv = ipmi_mc_pointer_cb(sel->mc, ipmi_sel_get_cb, elem);
+    rv = ipmi_mc_pointer_cb(sel->mc, ipmi_sel_get_cb, &info);
     if (!rv)
-	rv = elem->rv;
+	rv = info.rv;
     if (rv)
 	ipmi_mem_free(elem);
     if (rv == EEXIST)
