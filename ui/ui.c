@@ -5944,10 +5944,11 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	if (!parms[num_parms])
 	    break;
 	/* Remove surrounding quotes, if any. */
-	if (parms[num_parms][0] == '"')
+	if (parms[num_parms][0] == '"') {
 	    (parms[num_parms])++;
-	if (parms[num_parms][0])
-	    parms[num_parms][strlen(parms[num_parms])-1] = '0';
+	    if (parms[num_parms][0])
+		parms[num_parms][strlen(parms[num_parms])-1] = '0';
+	}
     }
 
     rv = ipmi_parse_args(&curr_parm, num_parms, argv, &con_parms[set]);
