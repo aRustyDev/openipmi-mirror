@@ -139,84 +139,23 @@ entity_change(enum ipmi_update_e op,
     }
 }
 
-/* After we have established connection to BMC, this function get called
-   At this time, we can do whatever things we want to do. Herr we want to
-   search all entities in the system */ 
+int prog_argc;
+char **prog_argv;
+
+void setup_done(ipmi_mc_t *mc,
+		void      *user_data,
+		int       err);
+
 void
-setup_done(ipmi_mc_t *mc,
-	   void      *user_data,
-	   int       err)
+make_connection(int argc, char *argv[])
 {
+    int curr_arg = 0;
     int rv;
-
-    /* Register a callback functin entity_change. When a new entities 
-       is created, entity_change is called */
-    rv = ipmi_bmc_set_entity_update_handler(mc, entity_change, mc);
-    if (rv) 
-	printf("ipmi_bmc_iterate_entities return error\n");
-}
-
-int
-main(int argc, char *argv[])
-{
-    int rv;
-    int curr_arg = 1;
-
-    progname = argv[0];
-
-    /* Create selector first. */
-    sel_alloc_selector(&ui_sel);
-
-    /* Initialize the OpenIPMI library. ipmi_ui_cb_handler is an OS
-       OS handler */
-    ipmi_init(&ipmi_ui_cb_handlers);
-
-#if 0
-    /* If all you need is an SMI connection, this is all the code you
-       need. */
-    /* Establish connections to BMC through system interface.  
-       This function connect BMC, selector and OS handler together.
-       When there is response message from BMC, the status of file descriptor
-       in selector is changed and predefined callback is called. After the
-       connection is established, setup_done will be called. */
-    rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, setup_done, NULL);
-    if (rv) {
-	printf("ipmi_smi_setup_con", rv);
-	exit(1);
-    }
-#endif
-
-#if 1
-    /* The following code does complex argument parsing to allow LAN
-       and SMI connections, and to allow specifying passwords,
-       etc. for LAN connections. */
-    while ((argc > 1) && (argv[curr_arg][0] == '-')) {
-	char *arg = argv[curr_arg];
-	curr_arg++;
-	argc--;
-	if (strcmp(arg, "--") == 0) {
-	    break;
-	} else if (strcmp(arg, "-dmem") == 0) {
-	    DEBUG_MALLOC_ENABLE();
-	} else if (strcmp(arg, "-dmsg") == 0) {
-	    DEBUG_MSG_ENABLE();
-	} else {
-	    fprintf(stderr, "Unknown option: %s\n", arg);
-	    usage();
-	    return 1;
-	}
-    }
-
-    if (argc < 2) {
-	fprintf(stderr, "Not enough arguments\n");
-	usage();
-	exit(1);
-    }
 
     if (strcmp(argv[curr_arg], "smi") == 0) {
 	con_type = SMI;
 
-	if (argc < 3) {
+	if (argc < 2) {
 	    fprintf(stderr, "Not enough arguments\n");
 	    usage();
 	    exit(1);
@@ -236,7 +175,7 @@ main(int argc, char *argv[])
 
 	con_type = LAN;
 
-	if (argc < 6) {
+	if (argc < 5) {
 	    fprintf(stderr, "Not enough arguments\n");
 	    usage();
 	    exit(1);
@@ -281,7 +220,7 @@ main(int argc, char *argv[])
 	    username[0] = '\0';
 	    password[0] = '\0';
 	} else {
-	    if (argc < 8) {
+	    if (argc < 7) {
 		fprintf(stderr, "Username and password not provided\n");
 		usage();
 		exit(1);
@@ -310,6 +249,117 @@ main(int argc, char *argv[])
 	usage();
 	exit(1);
     }
+}
+
+/* Called if the initial connection fails (in a timer callback, to
+   avoid deadlocks).  It attemts to make the connection again. */
+static void
+restart_connection(void *cb_data, os_hnd_timer_id_t *id)
+{
+    make_connection(prog_argc, prog_argv);
+}
+
+/* After we have established connection to BMC, this function get called
+   At this time, we can do whatever things we want to do. Herr we want to
+   search all entities in the system */ 
+void
+setup_done(ipmi_mc_t *mc,
+	   void      *user_data,
+	   int       err)
+{
+    int               rv;
+    os_hnd_timer_id_t *timer = NULL;
+    struct timeval    timeout;
+
+    if (err) {
+	printf("Unable to connect to the BMC due to error 0x%x, retrying\n",
+	       err);
+
+	rv = ipmi_ui_cb_handlers.alloc_timer(&ipmi_ui_cb_handlers, &timer);
+	if (rv) {
+	    printf("Could not allocate timer\n");
+	    return;
+	}
+
+	/* Wait a second and retry. */
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 0;
+	ipmi_ui_cb_handlers.start_timer(&ipmi_ui_cb_handlers,
+					timer,
+					&timeout,
+					restart_connection,
+					NULL);
+	
+	return;
+    }
+
+    /* Register a callback functin entity_change. When a new entities 
+       is created, entity_change is called */
+    rv = ipmi_bmc_set_entity_update_handler(mc, entity_change, mc);
+    if (rv) 
+	printf("ipmi_bmc_iterate_entities return error\n");
+}
+
+int
+main(int argc, char *argv[])
+{
+    int curr_arg = 1;
+
+    progname = argv[0];
+    argc--;
+
+    /* Create selector first. */
+    sel_alloc_selector(&ui_sel);
+
+    /* Initialize the OpenIPMI library. ipmi_ui_cb_handler is an OS
+       OS handler */
+    ipmi_init(&ipmi_ui_cb_handlers);
+
+#if 0
+    /* If all you need is an SMI connection, this is all the code you
+       need. */
+    /* Establish connections to BMC through system interface.  
+       This function connect BMC, selector and OS handler together.
+       When there is response message from BMC, the status of file descriptor
+       in selector is changed and predefined callback is called. After the
+       connection is established, setup_done will be called. */
+    rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, setup_done, NULL);
+    if (rv) {
+	printf("ipmi_smi_setup_con", rv);
+	exit(1);
+    }
+#endif
+
+#if 1
+    /* The following code does complex argument parsing to allow LAN
+       and SMI connections, and to allow specifying passwords,
+       etc. for LAN connections. */
+    while ((argc > 0) && (argv[curr_arg][0] == '-')) {
+	char *arg = argv[curr_arg];
+	curr_arg++;
+	argc--;
+	if (strcmp(arg, "--") == 0) {
+	    break;
+	} else if (strcmp(arg, "-dmem") == 0) {
+	    DEBUG_MALLOC_ENABLE();
+	} else if (strcmp(arg, "-dmsg") == 0) {
+	    DEBUG_MSG_ENABLE();
+	} else {
+	    fprintf(stderr, "Unknown option: %s\n", arg);
+	    usage();
+	    return 1;
+	}
+    }
+
+    if (argc < 1) {
+	fprintf(stderr, "Not enough arguments\n");
+	usage();
+	exit(1);
+    }
+
+    prog_argc = argc;
+    prog_argv = argv + curr_arg;
+    make_connection(prog_argc, prog_argv);
 #endif
 
     /* This is the main loop of the event-driven program. 
