@@ -1,3 +1,7 @@
+2004-03-31 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sdr.c: Fix a memory leak when the SDRs are replaced.
+
 2004-03-30 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Fix a problem checking the event capabilities
