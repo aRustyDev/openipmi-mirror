@@ -1,3 +1,8 @@
+2004-09-09 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c: Return the proper callback data for the sel_reread
+	function.
+
 2004-09-02 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Add a little more information about MCs.
