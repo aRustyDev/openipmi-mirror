@@ -35,6 +35,7 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
+#include <ctype.h>
 #include <stdio.h> /* For sprintf */
 
 #include <OpenIPMI/ipmi_conn.h>
@@ -2807,6 +2808,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	char        *name;
 	int         entity_id;
 
+printf("Handling address %d\n", info->addresses[i].hw_address);
 	b->shelf = info;
 	b->idx = i;
 	b->ipmb_address = info->addresses[i].hw_address * 2;
@@ -3044,7 +3046,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	unsigned int  mfg_id;
 	unsigned char *p;
 	unsigned char *str;
-	int           has_ipmb_32;
+	int           has_ipmb_32 = 0;
 
 	    
 	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
@@ -3146,6 +3148,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
         if (has_ipmb_32)
                 info->num_addresses--;
         else {
+printf("Adding address 32\n");
 	    /* If we don't find the "main" address, add it. */
             info->addresses[j].hw_address = 32 >> 1;
             info->addresses[j].site_num = 0;
