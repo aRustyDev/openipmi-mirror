@@ -2,6 +2,8 @@
 
 	* ui/ui.c: Add a little more information about MCs.
 
+	* sample/sample3.c, sample/Makefile.am: Added another sample file.
+
 	* configure.in: Move to version 1.3.10
 
 2004-09-01 Corey Minyard <cminyard@mvista.com> 
