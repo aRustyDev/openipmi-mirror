@@ -1,3 +1,7 @@
+2004-03-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
+
 2004-02-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a few problems were callbacks can receive
