@@ -6723,8 +6723,10 @@ mc_change(enum ipmi_update_e op,
 	    if (ipmi_mc_is_active(mc)) {
 		ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
 		ipmi_mc_set_sels_first_read_handler(mc, mc_sels_read, NULL);
+	        ui_log("MC added: (%d %x) - (active)\n", channel, addr);
+	    } else {
+	        ui_log("MC added: (%d %x) - (inactive)\n", channel, addr);
 	    }
-	    ui_log("MC added: (%d %x)\n", channel, addr);
 	    break;
 	case IPMI_DELETED:
 	    ui_log("MC deleted: (%d %x)\n", channel, addr);
