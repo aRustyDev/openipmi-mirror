@@ -10,6 +10,9 @@
 
 	* lib/entity.c: Don't require event support for a presence sensor.
 
+	* lib/entity.c: Don't fetch FRU information for an entity until
+	it is present.
+
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.22.
