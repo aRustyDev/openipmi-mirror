@@ -749,7 +749,11 @@ _ipmi_entity_put(ipmi_entity_t *ent)
  retry:
     if (ent->usecount == 1) {
 	if (ent->pending_info_ready) {
+            int was_fru = ipmi_entity_get_is_fru(ent);
 	    ent->info = ent->pending_info;
+            /* If the entity became a fru and is present, get its fru info. */
+            if (!was_fru && ipmi_entity_get_is_fru(ent) && ent->present)
+                ipmi_entity_fetch_frus(ent);
 	    entity_set_name(ent);
 	    ent->pending_info_ready = 0;
 	}

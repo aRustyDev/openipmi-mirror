@@ -9,6 +9,9 @@
 	* lib/oem_motorola_mxp.c: ditto
 	* swig/OpenIPMI.i: ditto
 
+	* lib/entity.c: Fixed an ordering problem were if the FRU becomes
+	present before its entity data comes in, still fetch the FRU info.
+
 2005-02-18 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmd_entity.c: Add an "entity tree" command to dump
