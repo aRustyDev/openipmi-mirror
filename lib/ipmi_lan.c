@@ -1794,10 +1794,6 @@ lan_send_command(ipmi_con_t            *ipmi,
     rv = handle_msg_send(info, -1, addr, addr_len, msg, rsp_handler,
 			 rsp_data, data2, data3, data4);
     if (rv) {
-	ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
-    }
-
-    if (rv) {
 	if (info->cancelled)
 	    /* The timer couldn't be stopped, so don't let the data be
 	       freed. */
@@ -2305,7 +2301,7 @@ handle_dev_id(ipmi_con_t   *ipmi,
 }
 
 static int
-send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan)
+send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     ipmi_msg_t			 msg;
     int				 rv;
@@ -2320,10 +2316,10 @@ send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data = NULL;
     msg.data_len = 0;
 
-    rv = lan_send_command(ipmi,
-			  (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, handle_dev_id,
-			  NULL, NULL, NULL, NULL);
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, handle_dev_id,
+				  NULL, NULL, NULL);
     return rv;
 }
 
@@ -2332,8 +2328,9 @@ lan_oem_done(ipmi_con_t *ipmi, void *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        rv;
+    int        addr_num = (long) cb_data;
 
-    rv = send_get_dev_id(ipmi, lan);
+    rv = send_get_dev_id(ipmi, lan, addr_num);
     if (rv)
         handle_connected(ipmi, rv);
 }
@@ -2349,6 +2346,7 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 {
     lan_data_t *lan;
     int        rv;
+    int        addr_num = (long) data4;
 
     if (!ipmi) {
 	handle_connected(ipmi, ECANCELED);
@@ -2373,7 +2371,8 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 	return;
     }
 
-    rv = ipmi_conn_check_oem_handlers(ipmi, lan_oem_done, NULL);
+    rv = ipmi_conn_check_oem_handlers(ipmi, lan_oem_done,
+				      (void *) (long) addr_num);
     if (rv)
         handle_connected(ipmi, rv);
 }

@@ -3160,6 +3160,8 @@ atca_register_fixups(void)
 			      misc_sdrs_fixup_reg, NULL, NULL);
     ipmi_register_oem_handler(0x000157, 0x0841,
 			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000157, 0x080a,
+			      misc_sdrs_fixup_reg, NULL, NULL);
 }
 
 /***********************************************************************
