@@ -1,3 +1,10 @@
+2004-12-03 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca.c: Reworked the fixups for broken entity ids to
+	be more general.
+
+	* configure.in: Move to version 1.3.14.
+
 2004-12-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Ignore sensors for presence if they use the
