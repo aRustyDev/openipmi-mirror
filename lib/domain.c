@@ -80,8 +80,8 @@ typedef struct audit_domain_info_s
 } audit_domain_info_t;
 
 /* Used to keep a record of a bus scan. */
-typedef struct mc_ipbm_scan_info_s mc_ipmb_scan_info_t;
-struct mc_ipbm_scan_info_s
+typedef struct mc_ipmb_scan_info_s mc_ipmb_scan_info_t;
+struct mc_ipmb_scan_info_s
 {
     ipmi_addr_t         addr;
     unsigned int        addr_len;
@@ -2276,6 +2276,9 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     if (channel > MAX_IPMI_USED_CHANNELS)
 	return EINVAL;
 
+    if (domain->chan[channel].medium != 1) /* Make sure it is IPMB */
+	return ENOSYS;
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -3770,20 +3773,10 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (rv) {
-	/* Got an error, could be out of channels. */
-	if (curr == 0) {
-	    /* Didn't get any channels, just set up a default channel
-	       zero and IPMB. */
-	    domain->chan[0].medium = 1; /* IPMB */
-	    domain->chan[0].xmit_support = 1;
-	    domain->chan[0].recv_lun = 0;
-	    domain->chan[0].protocol = 1; /* IPMB */
-	    domain->chan[0].session_support = 0; /* Session-less */
-	    domain->chan[0].vendor_id = 0x001bf2;
-	    domain->chan[0].aux_info = 0;
-	} else {
-	    memset(&domain->chan[curr], 0, sizeof(domain->chan[curr]));
- 	}
+	/* Got an error, invalidate the channel.  IPMI requires that
+	   1.5 systems implement this command if they have
+	   channels. */
+	memset(&domain->chan[curr], 0, sizeof(domain->chan[curr]));
 	/* Keep going, there may be more channels. */
     } else {
         /* Get the info from the channel info response. */
@@ -3920,17 +3913,46 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 }
 
 static void
-domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
+got_guid(ipmi_mc_t  *mc,
+	 ipmi_msg_t *rsp,
+	 void       *rsp_data)
 {
-    int rv;
+    ipmi_domain_t *domain = rsp_data;
+    int           rv;
 
-    /* FIXME - handle errors setting up OEM comain information. */
+    if (!mc)
+	return; /* domain went away while processing. */
+
+    if ((rsp->data[0] == 0) && (rsp->data_len >= 17)) {
+	/* We have a GUID, save it */
+	ipmi_mc_set_guid(mc, rsp->data+1);
+    }
 
     if (domain->SDR_repository_support && ipmi_option_SDRs(domain)) {
 	rv = ipmi_sdr_fetch(domain->main_sdrs, sdr_handler, domain);
     } else {
 	rv = get_channels(domain);
     }
+    if (rv)
+	call_con_fails(domain, rv, 0, 0, 0);
+}
+
+static void
+domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    ipmi_msg_t msg;
+    int        rv;
+
+    /* FIXME - handle errors setting up OEM comain information. */
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_SYSTEM_GUID_CMD;
+    msg.data_len = 0;
+    msg.data = NULL;
+
+    _ipmi_mc_get(domain->si_mc);
+    rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_guid, domain);
+    _ipmi_mc_put(domain->si_mc);
     if (rv)
 	call_con_fails(domain, rv, 0, 0, 0);
 }
@@ -4702,6 +4724,16 @@ ipmi_domain_get_channel(ipmi_domain_t    *domain,
 
     *chan = domain->chan[index];
     return 0;
+}
+
+int
+ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid)
+{
+    int rv;
+    _ipmi_mc_get(domain->si_mc);
+    rv = ipmi_mc_get_guid(domain->si_mc, guid);
+    _ipmi_mc_put(domain->si_mc);
+    return rv;
 }
 
 int

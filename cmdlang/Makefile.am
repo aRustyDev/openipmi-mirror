@@ -19,7 +19,9 @@ libOpenIPMIcmdlang_la_SOURCES = cmdlang.c cmd_domain.c cmd_entity.c cmd_mc.c \
 	cmd_pef.c cmd_conn.c cmd_fru.c out_fru.c os_debug.c
 libOpenIPMIcmdlang_la_LIBADD = -lm \
 	$(top_builddir)/utils/libOpenIPMIutils.la \
-	$(top_builddir)/lib/libOpenIPMI.la
+	$(top_builddir)/lib/libOpenIPMI.la \
+	$(GDBM_LIB)
+
 libOpenIPMIcmdlang_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIcmdlang.map
 

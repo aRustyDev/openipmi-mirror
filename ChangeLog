@@ -1,3 +1,54 @@
+2005-02-02 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/os_handler.h, lib/ipmi.c: Added an interface to
+	protect users that have created their own OS handler from
+	additions to the os handler data structure.
+
+	* include/OpenIPMI/os_handler.h, lib/sdr.c: Added a non-blocking
+	mode to the database.
+
+	* configure.in: Added gdbm tests.
+
+	* cmdlang/os_debug.c, cmdlang/Makefile.am: Added gdbm support.
+	* glib/glib_os_hnd.c, glib/Makefile.am: ditto
+	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.cg, unix/Makefile.am:
+	ditto
+
+	* lib/sdr.c: Add support for dynamically resizing SDR fetches if
+	the system cannot support the size required.  This allowed an
+	increase in the starting size but can support smaller sizes than
+	were supported.
+	* lib/fru.c: Ditto, but for FRU data.
+
+	* lib/domain.c: Fixed channel handling to not scan the IPMB if
+	there is not one from the channel info command.  This may cause
+	some broken 1.5 systems (that do not implement the get channel
+	info command properly) to not work, but that's too bad, they are
+	broken.  Systems without IPMB will work much better with this
+	change.
+
+	* include/OpenIPMI/os_handler.h: Added a database interface.
+	***NOTENOTENOTENOTENOTENOTENOTENOTENOTENOTENOTENOTENOTENOTE**:
+	This change is not binary backwards compatible if you have created
+	your own OS handler.  If you have used the standard ones then it
+	is ok.
+
+	* lib/sdr.h: Added support for storing and retrieving SDR
+	data in the database for client-side caching.
+
+	* lib/lanparm.c: Allow zero-length parm responses to represent
+	optional unsupported parms.
+
+	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/ipmiif.h.in: Added
+	routines to get the GUID for the system and for each MC.
+	* include/OpenIPMI/internal/ipmi_mc.h: ditto (added set routine)
+	* lib/mc.c: ditto
+	* lib/domain.c: ditto
+	* cmdlang/cmd_mc.c: ditto
+	* cmdlang/cmd_domain.c: ditto
+	* swig/OpenIPMI.i: ditto
+	* man/ipmi_cmdlang.7: ditto
+
 2005-02-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca.c: Force instance to be 0x60 on all main units that

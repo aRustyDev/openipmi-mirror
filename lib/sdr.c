@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sdr.h>
@@ -44,8 +45,11 @@
 #include <OpenIPMI/internal/ipmi_mc.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 
-/* Max bytes to try to get at a time. */
-#define MAX_SDR_FETCH 20
+/* Max bytes to try to get at a time, the minimum allowed, and the
+   amount to decrement between tries. */
+#define MAX_SDR_FETCH_BYTES 28
+#define MIN_SDR_FETCH_BYTES 10
+#define SDR_FETCH_BYTES_DECR 6
 
 /* Do up to this many retries when the reservation is lost. */
 #define MAX_SDR_FETCH_RETRIES 10
@@ -72,7 +76,7 @@ typedef struct fetch_info_s
     unsigned int idx;
     unsigned int offset;
     unsigned int read_len;
-    unsigned char data[MAX_SDR_FETCH+2];
+    unsigned char data[MAX_SDR_FETCH_BYTES+2];
 
     ilist_item_t link;
 } fetch_info_t;
@@ -131,11 +135,16 @@ struct ipmi_sdr_info_s
     /* Are we currently fetching SDRs? */
     enum fetch_state_e fetch_state;
 
+    /* Are we currently fetching database data? */
+    int                db_fetching;
+
     /* When fetching the data in event-driven mode, these are the
        variables that track what is going on. */
     int                    curr_rec_id;
     int                    read_offset; /* Next data to read, -1 if
                                            the header */
+
+    int                    fetch_size;
 
     int                    curr_read_rec_id;
     int                    next_read_rec_id;
@@ -178,8 +187,12 @@ struct ipmi_sdr_info_s
     unsigned int num_sdrs;
     unsigned int sdr_array_size;
     ipmi_sdr_t *sdrs;
+
+    char db_key[32+5];
+    int  db_key_set;
 };
 
+static void internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs);
 
 static inline void sdr_lock(ipmi_sdr_info_t *sdrs)
 {
@@ -213,6 +226,119 @@ cleanup_fetch_items(ipmi_sdr_info_t *sdrs)
     ilist_iter(sdrs->free_fetch, free_fetch, NULL);
     ilist_iter(sdrs->process_fetch, free_fetch, NULL);
     ilist_iter(sdrs->outstanding_fetch, cancel_fetch, NULL);
+}
+
+static void
+process_db_data(ipmi_sdr_info_t *sdrs,
+		unsigned char   *db_data,
+		unsigned int    len)
+{
+    int           num;
+    unsigned char *d;
+
+    if (len < 9)
+	goto no_db;
+
+    /* Format# is the last byte. */
+    d = db_data + len - 1;
+    if (*d != 1)
+	goto no_db;
+
+    /* timestamps are the 8 bytes before the format#. */
+    d -= 8;
+    sdrs->last_addition_timestamp = ipmi_get_uint32(d);
+    d += 4;
+    sdrs->last_erase_timestamp = ipmi_get_uint32(d);
+    d += 4;
+    len -= 9;
+    num = len / sizeof(ipmi_sdr_t);
+    /* Allocate 9 extra bytes for storing the timestamps and
+     * format#. */
+    sdrs->sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t) * num) + 9);
+    if (!sdrs->sdrs)
+	goto no_db;
+    memcpy(sdrs->sdrs, db_data, sizeof(ipmi_sdr_t) * num);
+    sdrs->num_sdrs = num;
+    sdrs->sdr_array_size = num;
+    sdrs->fetched = 1;
+
+ no_db:
+    sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
+}
+
+static void
+db_fetched(void          *cb_data,
+	   int           err,
+	   unsigned char *db_data,
+	   unsigned int  db_data_len)
+{
+    ipmi_sdr_info_t *sdrs = cb_data;
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	internal_destroy_sdr_info(sdrs);
+	return;
+    }
+
+    /* Note that since this is run from the opq, there is no reason to
+       check to see if another fetch is going on and has finished.  We
+       are guaranteed that this works. */
+    if (!err)
+	process_db_data(sdrs, db_data, db_data_len);
+
+    sdrs->db_fetching = 0;
+    sdr_unlock(sdrs);
+    if (!err)
+	sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
+    opq_op_done(sdrs->sdr_wait_q);
+}
+
+static void
+start_db_fetch(void *cb_data, int shutdown)
+{
+    ipmi_sdr_info_t *sdrs = cb_data;
+    int             rv = ENOSYS;
+
+    if (shutdown)
+	return;
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	internal_destroy_sdr_info(sdrs);
+	return;
+    }
+
+    /* Go ahead and do the database fetch here if we have support. */
+    if (sdrs->os_hnd->database_find && sdrs->db_key_set)
+    {
+	unsigned char *db_data;
+	unsigned int  db_data_len;
+	int           data_fetched = 0;
+
+	rv = sdrs->os_hnd->database_find(sdrs->os_hnd,
+					 sdrs->db_key,
+					 &data_fetched,
+					 &db_data,
+					 &db_data_len,
+					 db_fetched,
+					 sdrs);
+	/* If the above fails, no problem, the db_data will be NULL. */
+	if (!rv) {
+	    if (data_fetched) {
+		process_db_data(sdrs, db_data, db_data_len);
+		rv = -1; /* Just mark it as done */
+	    }
+	}
+    } else {
+	rv = -1; /* Just mark it as done */
+    }
+
+    if (rv) {
+	sdrs->db_fetching = 0;
+	sdr_unlock(sdrs);
+	opq_op_done(sdrs->sdr_wait_q);
+    } else
+	sdr_unlock(sdrs);
 }
 
 int
@@ -254,6 +380,7 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     sdrs->lun = lun;
     sdrs->sensor = sensor;
     sdrs->sdr_wait_q = NULL;
+    sdrs->fetch_size = MAX_SDR_FETCH_BYTES;
 
     /* Assume we have a dynamic population until told otherwise. */
     sdrs->dynamic_population = 1;
@@ -370,7 +497,7 @@ ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
     sdrs->destroyed = 1;
     sdrs->destroy_handler = handler;
     sdrs->destroy_cb_data = cb_data;
-    if (sdrs->fetch_state != IDLE) {
+    if ((sdrs->fetch_state != IDLE) || sdrs->db_fetching) {
 	/* It's currently in fetch state, so let it be destroyed in
            the handler, since we can't cancel the handler or
            operation. */
@@ -409,6 +536,24 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
 	sdrs->working_sdrs = NULL;
 	if (to_free)
 	    ipmi_mem_free(to_free);
+
+	if (sdrs->os_hnd->database_store) {
+	    unsigned int  len = sdrs->num_sdrs * sizeof(ipmi_sdr_t);
+	    unsigned char *d = ((unsigned char *) sdrs->sdrs) + len;
+
+	    /* We always allocate 9 extra bytes in the SDR data to put
+	       the timestamps and format at the end. */
+	    ipmi_set_uint32(d, sdrs->last_addition_timestamp);
+	    d += 4;
+	    ipmi_set_uint32(d, sdrs->last_erase_timestamp);
+	    d += 4;
+	    *d = 1; /* format # */
+	    len += 9;
+	    sdrs->os_hnd->database_store(sdrs->os_hnd,
+					 sdrs->db_key,
+					 (unsigned char *) sdrs->sdrs,
+					 len);
+	}
     }
     sdrs->fetch_state = HANDLERS;
     sdr_unlock(sdrs);
@@ -820,6 +965,37 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
+    if (rsp->data[0] == IPMI_CANNOT_RETURN_REQ_LENGTH_CC) {
+	/* It's more than the system can return in a single messages,
+	   decrease the size. */
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+
+	sdrs->fetch_size -= SDR_FETCH_BYTES_DECR;
+	if (sdrs->fetch_size < MIN_SDR_FETCH_BYTES) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "SDR target chould not support the minimum fetch size");
+
+	    sdrs->fetch_err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+
+	    if (!ilist_empty(sdrs->outstanding_fetch))
+		goto out_unlock;
+
+	    fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	    goto out;
+	} else {
+	    /* Cancel any current or newer pending operations. */
+	    cancel_same_or_newer(sdrs, info->idx);
+
+	    /* Re-start the fetch on this SDR. */
+	    sdrs->next_read_offset = -1;
+	    sdrs->read_size = -1;
+	    sdrs->next_read_rec_id = info->sdr_rec;
+	    sdrs->curr_read_idx = info->idx-1;
+
+	    goto out_nextmsg;
+	}
+    }
+
     if (rsp->data[0] != 0) {
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
@@ -932,8 +1108,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 		    int new_num_sdrs = sdrs->working_num_sdrs + 10;
 		    ipmi_sdr_t *new_sdrs;
 
-		    new_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t)
-					      * new_num_sdrs);
+		    /* Allocate 9 extra bytes for the db info. */
+		    new_sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t)
+					       * new_num_sdrs) + 9);
 		    if (!new_sdrs) {
 			ipmi_log(IPMI_LOG_ERR_INFO,
 				 "SDR respository had more SDRs than"
@@ -974,8 +1151,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    info->read_len = SDR_HEADER_SIZE;
 	} else {
 	    info->read_len = sdrs->read_size - sdrs->next_read_offset;
-	    if (info->read_len > MAX_SDR_FETCH)
-		info->read_len = MAX_SDR_FETCH;
+	    if (info->read_len > sdrs->fetch_size)
+		info->read_len = sdrs->fetch_size;
 	    info->offset = sdrs->next_read_offset;
 	    sdrs->next_read_offset += info->read_len;
 	}
@@ -1016,6 +1193,11 @@ initial_sdr_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     }
     info->sdr_rec = sdrs->curr_rec_id;
     info->offset = 0;
+    /* If all systems were implemented correctly, we could do a big
+       fetch here and if it was too big then they would just return
+       what was available.  Some systems, though, are picky about the
+       sizes being exactly right.  So we fetch the header first so we
+       can get the size. */
     info->read_len = SDR_HEADER_SIZE;
     info->fetch_retry_num = sdrs->fetch_retry_count;
     info->idx = sdrs->curr_read_idx;
@@ -1219,8 +1401,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    sdrs->working_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t)
-					* sdrs->working_num_sdrs);
+    /* Allocate 9 extra bytes for the db info. */
+    sdrs->working_sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t)
+					* sdrs->working_num_sdrs) + 9);
     if (!sdrs->working_sdrs) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Could not allocate working SDR information");
@@ -1404,12 +1587,14 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     sdr_fetch_info_t    *info = cb_data;
     ipmi_sdr_info_t     *sdrs = info->sdrs;
     sdr_fetch_handler_t *elem;
+    unsigned char       guid[16];
 
     elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem) {
 	info->rv = ENOMEM;
 	return;
     }
+    memset(elem, 0, sizeof(*elem));
 
     elem->sdrs = sdrs;
     elem->handler = info->handler;
@@ -1426,6 +1611,27 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	    goto out;
 	}
     }
+
+    sdr_lock(sdrs);
+    if (!sdrs->fetched) {
+	/* Look in the database before the first fetch. */
+	if (ipmi_mc_get_guid(mc, guid) == 0) {
+	    char *s;
+	    int  i;
+
+	    s = sdrs->db_key;
+	    s += sprintf(s, "sdr-");
+	    for (i=0; i<16; i++)
+		s += sprintf(s, "%2.2x", guid[i]);
+	    sdrs->db_key_set = 1;
+	}
+
+	sdrs->db_fetching = 1;
+	sdr_unlock(sdrs);
+	if (!opq_new_op(sdrs->sdr_wait_q, start_db_fetch, sdrs, 0))
+	    sdrs->db_fetching = 0;
+    } else
+	sdr_unlock(sdrs);
 
     if (! opq_new_op_with_done(sdrs->sdr_wait_q,
 			       handle_start_fetch,
@@ -1767,7 +1973,9 @@ ipmi_sdr_add(ipmi_sdr_info_t *sdrs,
     sdr_lock(sdrs);
     if (sdrs->num_sdrs >= sdrs->sdr_array_size) {
 	ipmi_sdr_t *new_array;
-	new_array = ipmi_mem_alloc(sizeof(ipmi_sdr_t) * sdrs->sdr_array_size + 10);
+	/* Allocate 9 extra bytes for the db info. */
+	new_array = ipmi_mem_alloc((sizeof(ipmi_sdr_t)
+				    * (sdrs->sdr_array_size + 10)) + 9);
 	if (!new_array) {
 	    rv = ENOMEM;
 	    goto out_unlock;
@@ -1854,7 +2062,7 @@ start_sdr_write(ipmi_sdr_info_t *sdrs,
     cmd_msg.data[8] = sdr->major_version | (sdr->minor_version << 4);
     cmd_msg.data[9] = sdr->type;
     cmd_msg.data[10] = sdr->length;
-    if (sdr->length >= (MAX_SDR_FETCH - 5)) {
+    if (sdr->length >= (sdrs->fetch_size - 5)) {
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+11, sdr->data, sdr->length);
 	cmd_msg.data_len = 11 + sdr->length;
@@ -1862,9 +2070,9 @@ start_sdr_write(ipmi_sdr_info_t *sdrs,
 				    handle_sdr_write_done, sdr);
     } else {
 	cmd_msg.data[5] = 0;
-	memcpy(cmd_msg.data+11, sdr->data, (MAX_SDR_FETCH - 5));
-	cmd_msg.data_len = 11 + (MAX_SDR_FETCH - 5);
-	sdrs->sdr_data_write = MAX_SDR_FETCH - 5;
+	memcpy(cmd_msg.data+11, sdr->data, (sdrs->fetch_size - 5));
+	cmd_msg.data_len = 11 + (sdrs->fetch_size - 5);
+	sdrs->sdr_data_write = sdrs->fetch_size - 5;
 	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
 				    handle_sdr_write, sdr);
     }
@@ -1933,7 +2141,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
     cmd_msg.data[4] = sdrs->sdr_data_write;
     wleft = sdr->length - sdrs->sdr_data_write;
-    if (wleft >= MAX_SDR_FETCH) {
+    if (wleft >= sdrs->fetch_size) {
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write, wleft);
 	cmd_msg.data_len = 6 + wleft;
@@ -1941,9 +2149,10 @@ handle_sdr_write(ipmi_mc_t  *mc,
 				  handle_sdr_write_done, sdr);
     } else {
 	cmd_msg.data[5] = 0;
-	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write, MAX_SDR_FETCH);
-	cmd_msg.data_len = 6 + MAX_SDR_FETCH;
-	sdrs->sdr_data_write += MAX_SDR_FETCH;
+	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write,
+	       sdrs->fetch_size);
+	cmd_msg.data_len = 6 + sdrs->fetch_size;
+	sdrs->sdr_data_write += sdrs->fetch_size;
 	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
 				  handle_sdr_write, sdr);
     }
