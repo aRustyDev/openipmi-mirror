@@ -2275,6 +2275,27 @@ atca_entity_update_handler(enum ipmi_update_e op,
     enum ipmi_dlr_type_e etype = ipmi_entity_get_type(entity);
     int                  rv;
 
+    if (op == IPMI_ADDED) {
+	/* Set meaningful entity id strings. */
+	switch (ipmi_entity_get_entity_id(entity)) {
+	case 0xa0:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA Board");
+	    break;
+	case 0xc0:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA RTM");
+	    break;
+	case 0xf0:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA ShMC");
+	    break;
+	case 0xf1:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA Filtration Unit");
+	    break;
+	case 0xf2:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA Shelf FRU");
+	    break;
+	}
+    }
+
     /* We only care about FRU and MC entities. */
     if (etype == IPMI_ENTITY_FRU)
 	finfo = atca_find_fru_info(info, entity);
@@ -2576,53 +2597,6 @@ atca_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 }
 
 static void
-atca_entity_fix(ipmi_entity_t *entity, void *cb_data)
-{
-    atca_ipmc_t *b = cb_data;
-    char        *entity_id_str = NULL;
-
-    switch (b->site_type) {
-    case 0:
-	entity_id_str = "ATCA Board";
-	break;
-
-    case 1: /* Power entry module */
-	entity_id_str = "ATCA Power Unit";
-	break;
-
-    case 2: /* Shelf FRU info */
-	entity_id_str = "ATCA Shelf FRU";
-	break;
-
-    case 3: /* Dedicated ShMC */
-	entity_id_str = "ATCA ShMC";
-	break;
-
-    case 4: /* Fan Tray */
-	entity_id_str = "ATCA Fan Tray";
-	break;
-
-    case 5: /* Fan Filter Tray */
-	entity_id_str = "ATCA Fan Filters";
-	break;
-
-    case 9: /* Rear Transition Module */
-	entity_id_str = "ATCA RTM";
-	break;
-
-    case 6: /* Alarm */
-    case 7: /* AdvancedMC Module */
-    case 8: /* PMC */
-    default:
-	/* Skip adding the entity. */
-	break;
-    }
-
-    if (entity_id_str)
-	ipmi_entity_set_entity_id_string(entity, entity_id_str);
-}
-
-static void
 setup_from_shelf_fru(ipmi_domain_t *domain,
 		     atca_shelf_t  *info)
 {
@@ -2742,13 +2716,12 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	    continue;
 	}
 
-	rv = ipmi_entity_add_with_fixup(ents, domain, 0, b->ipmb_address, 0,
-					entity_id,
-					0x60, /* Always device relative */
-					name, IPMI_ASCII_STR, strlen(name),
-					atca_entity_sdr_add, NULL,
-					atca_entity_fix, b,
-					&b->frus[0]->entity);
+	rv = ipmi_entity_add(ents, domain, 0, b->ipmb_address, 0,
+			     entity_id,
+			     0x60, /* Always device relative */
+			     name, IPMI_ASCII_STR, strlen(name),
+			     atca_entity_sdr_add, NULL,
+			     &b->frus[0]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_atca.c(shelf_fru_fetched): "
@@ -3260,12 +3233,12 @@ atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
 
     case 6:
 	*id = 0xf0;
-	inst += 0x60;
+	inst = 0x60;
 	break;
 
     case 3:
 	if (inst < 0x60)
-	    inst += 0x60;
+	    inst = 0x60;
 	break;
 
     case 23:

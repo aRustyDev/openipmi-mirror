@@ -76,26 +76,6 @@ int ipmi_entity_add(ipmi_entity_info_t *ents,
 		    void               *sdr_gen_cb_data,
 		    ipmi_entity_t      **new_ent);
 
-/* Like the above, but adds a fixup callback to change attributes
-   about the entity before it is reported to the user or added to any
-   lists. */
-typedef void (*ipmi_entity_fixup_cb)(ipmi_entity_t *entity, void *cb_data);
-int ipmi_entity_add_with_fixup(ipmi_entity_info_t   *ents,
-			       ipmi_domain_t        *domain,
-			       unsigned char        mc_channel,
-			       unsigned char        mc_slave_addr,
-			       int                  lun,
-			       int                  entity_id,
-			       int                  entity_instance,
-			       char                 *id,
-			       enum ipmi_str_type_e id_type,
-			       unsigned int         id_len,
-			       entity_sdr_add_cb    sdr_gen_output,
-			       void                 *sdr_gen_cb_data,
-			       ipmi_entity_fixup_cb fixup,
-			       void                 *fixup_cb_data,
-			       ipmi_entity_t        **new_ent);
-
 /* Called only when the MC that the entity came from is destroyed.
    Note that this may not actually remove the entity, that depends on
    if it has sensors referencing it. */

@@ -663,15 +663,13 @@ ipmi_entity_find(ipmi_entity_info_t *ents,
 }
 
 static int
-entity_add(ipmi_entity_info_t   *ents,
-	   ipmi_device_num_t    device_num,
-	   int                  entity_id,
-	   int                  entity_instance,
-	   entity_sdr_add_cb    sdr_gen_output,
-	   void                 *sdr_gen_cb_data,
-	   ipmi_entity_fixup_cb fixup,
-	   void                 *fixup_cb_data,
-	   ipmi_entity_t        **new_ent)
+entity_add(ipmi_entity_info_t *ents,
+	   ipmi_device_num_t  device_num,
+	   int                entity_id,
+	   int                entity_instance,
+	   entity_sdr_add_cb  sdr_gen_output,
+	   void               *sdr_gen_cb_data,
+	   ipmi_entity_t      **new_ent)
 {
     int                            rv;
     ipmi_entity_t                  *ent;
@@ -684,8 +682,6 @@ entity_add(ipmi_entity_info_t   *ents,
 	    (*new_ent)->sdr_gen_output = sdr_gen_output;
 	    (*new_ent)->sdr_gen_cb_data = sdr_gen_cb_data;
 	}
-	if (fixup)
-	    fixup(*new_ent, fixup_cb_data);
 	return 0;
     }
 
@@ -773,9 +769,6 @@ entity_add(ipmi_entity_info_t   *ents,
 
     ent->entity_id_string = ipmi_get_entity_id_string(entity_id);
 
-    if (fixup)
-	fixup(ent, fixup_cb_data);
-
     if (!ilist_add_tail(ents->entities, ent, NULL))
 	goto out_err;
 
@@ -827,21 +820,19 @@ entity_add(ipmi_entity_info_t   *ents,
 }
 
 int
-ipmi_entity_add_with_fixup(ipmi_entity_info_t   *ents,
-			   ipmi_domain_t        *domain,
-			   unsigned char        mc_channel,
-			   unsigned char        mc_slave_addr,
-			   int                  lun,
-			   int                  entity_id,
-			   int                  entity_instance,
-			   char                 *id,
-			   enum ipmi_str_type_e id_type,
-			   unsigned int         id_len,
-			   entity_sdr_add_cb    sdr_gen_output,
-			   void                 *sdr_gen_cb_data,
-			   ipmi_entity_fixup_cb fixup,
-			   void                 *fixup_cb_data,
-			   ipmi_entity_t        **new_ent)
+ipmi_entity_add(ipmi_entity_info_t   *ents,
+		ipmi_domain_t        *domain,
+		unsigned char        mc_channel,
+		unsigned char        mc_slave_addr,
+		int                  lun,
+		int                  entity_id,
+		int                  entity_instance,
+		char                 *id,
+		enum ipmi_str_type_e id_type,
+		unsigned int         id_len,
+		entity_sdr_add_cb    sdr_gen_output,
+		void                 *sdr_gen_cb_data,
+		ipmi_entity_t        **new_ent)
 {
     ipmi_device_num_t device_num;
     int               rv;
@@ -860,7 +851,7 @@ ipmi_entity_add_with_fixup(ipmi_entity_info_t   *ents,
     ipmi_domain_entity_lock(domain);
 
     rv = entity_add(ents, device_num, entity_id, entity_instance,
-		    sdr_gen_output, sdr_gen_cb_data, fixup, fixup_cb_data,
+		    sdr_gen_output, sdr_gen_cb_data,
 		    &ent);
     if (!rv) {
         if (!ent->info.id_len)
@@ -872,29 +863,6 @@ ipmi_entity_add_with_fixup(ipmi_entity_info_t   *ents,
     ipmi_domain_entity_unlock(domain);
 
     return 0;
-}
-
-int
-ipmi_entity_add(ipmi_entity_info_t *ents,
-		ipmi_domain_t      *domain,
-		unsigned char      mc_channel,
-		unsigned char      mc_slave_addr,
-		int                lun,
-		int                entity_id,
-		int                entity_instance,
-		char               *id,
-		enum ipmi_str_type_e id_type,
-		unsigned int       id_len,
-		entity_sdr_add_cb  sdr_gen_output,
-		void               *sdr_gen_cb_data,
-		ipmi_entity_t      **new_ent)
-{
-    return ipmi_entity_add_with_fixup(ents, domain, mc_channel, mc_slave_addr,
-				      lun, entity_id, entity_instance,
-				      id, id_type, id_len,
-				      sdr_gen_output, sdr_gen_cb_data,
-				      NULL, NULL,
-				      new_ent);
 }
 
 static int
@@ -2721,7 +2689,6 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 			    infos->dlrs[i]->entity_id,
 			    infos->dlrs[i]->entity_instance,
 			    infos->dlrs[i]->output_handler, NULL,
-			    NULL, NULL,
 			    &found->ent);
 	    if (rv)
 		goto out_err;
@@ -2744,7 +2711,6 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 		for (k=cent1->entity_instance; k<=cent2->entity_instance; k++){
 		    rv = entity_add(ents, cent1->device_num,
 				    cent1->entity_id, k,
-				    NULL, NULL,
 				    NULL, NULL, &child);
 		    if (rv)
 			goto out_err;
@@ -2769,7 +2735,6 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 		    continue;
 		rv = entity_add(ents, cent->device_num,
 				cent->entity_id, cent->entity_instance,
-				NULL, NULL,
 				NULL, NULL, &child);
 		if (rv)
 		    return rv;
