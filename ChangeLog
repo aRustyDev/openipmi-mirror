@@ -1,5 +1,8 @@
 2004-04-13 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/entity.c: Prefer to keep MCDLR information from MCDLRs that
+	have FRU info.
+
 	* configure.in: Move to version 1.2.23.
 
 2004-04-07 Corey Minyard <cminyard@mvista.com> 

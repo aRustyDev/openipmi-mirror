@@ -2572,6 +2572,23 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    entity_set_name(found->ent);
 	    /* Don't fetch FRU information until present. */
+
+	    if (infos.dlrs[i]->type == IPMI_ENTITY_FRU) {
+		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
+	    }
+	    else if (infos.dlrs[i]->type == IPMI_ENTITY_MC)
+	    {
+		/* We prefer to only keep the information from the FRU
+		   inventory device MCDLR. */
+		if ((infos.dlrs[i]->FRU_inventory_device)
+		    || (!found->ent->info.FRU_inventory_device))
+		{
+		    memcpy(&found->ent->info, infos.dlrs[i],
+			   sizeof(dlr_info_t));
+		}
+	    } else {
+		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
+	    }
 	} else {
 	    /* It's an EAR, so handling adding the children. */
 	    for (j=0; j<found->cent_next; j++) {
