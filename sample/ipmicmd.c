@@ -499,6 +499,11 @@ process_input_line(char *buf)
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
     }
 
+    if (pos <= 0) {
+	printf("No channel specified\n");
+	return -1;
+    }
+
     start = 0;
     channel = outbuf[start]; start++;
 

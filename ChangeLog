@@ -1,3 +1,16 @@
+2005-03-22 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Fix a bug in fru presence handling, addressing
+	beyond the end of the array.
+
+	* lib/ipmi.c: Fixed a problem with handling of 1-byte full ASCII.
+
+	* unix/posix_thread_os_hnd.c: Fix a possible double-free scenario.
+
+	* glib/glib_os_hnd.c: Fix a possible use of free data scenario.
+
+	* sample/ipmicmd.c: Check to make sure the channel is present.
+
 2005-03-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Fixed an off-by-one problem when writing FRU data.
