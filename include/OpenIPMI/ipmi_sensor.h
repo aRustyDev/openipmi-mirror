@@ -55,7 +55,7 @@ unsigned int ipmi_sensors_get_count(ipmi_sensor_info_t *sensors);
 
 /* Call the given callback with the sensor. */
 int ipmi_find_sensor(ipmi_mc_t *mc, int lun, int num,
-		     ipmi_sensor_cb handler, void *cb_data);
+		     ipmi_sensor_ptr_cb handler, void *cb_data);
 
 /* Allocate a sensor, it will not be associated with anything yet. */
 int ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor);
@@ -490,8 +490,8 @@ ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
 /* Do a pointer callback but ignore the sequence number in the MC.
    This is primarily for handling incoming events, where the sequence
    number doesn't matter. */
-int ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t id,
-				 ipmi_sensor_cb   handler,
-				 void             *cb_data);
+int ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
+				 ipmi_sensor_ptr_cb handler,
+				 void               *cb_data);
 
 #endif /* _IPMI_SENSOR_H */

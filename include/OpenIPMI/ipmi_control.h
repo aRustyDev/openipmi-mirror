@@ -116,11 +116,11 @@ int ipmi_control_send_command_addr(ipmi_mc_t              *bmc,
 				   void                   *cb_data);
 
 /* Call the given callback with the control. */
-int ipmi_find_control(ipmi_mc_t       *mc,
-		      int             lun,
-		      int             num,
-		      ipmi_control_cb handler,
-		      void            *cb_data);
+int ipmi_find_control(ipmi_mc_t           *mc,
+		      int                 lun,
+		      int                 num,
+		      ipmi_control_ptr_cb handler,
+		      void                *cb_data);
 
 /* Allocate a control, it will not be associated with anything yet. */
 int ipmi_control_alloc_nonstandard(ipmi_control_t **new_control);

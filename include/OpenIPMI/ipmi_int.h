@@ -54,7 +54,7 @@ void ipmi_write_unlock(void);
 typedef struct ipmi_lock_s ipmi_lock_t;
 
 /* Create a lock, using the OS handlers for the given MC. */
-int ipmi_create_lock(ipmi_mc_t *mc, ipmi_lock_t **lock);
+int ipmi_create_lock(ipmi_domain_t *mc, ipmi_lock_t **lock);
 
 /* Create a lock using the main os handler registered with ipmi_init(). */
 int ipmi_create_global_lock(ipmi_lock_t **new_lock);
@@ -88,7 +88,7 @@ int ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
 /* This is called by the entity code when a new entity is created.
    Entity creation cannot be stopped.  This will call the OEM code if
    it has registered for this. */
-void ipmi_bmc_oem_new_entity(ipmi_mc_t *bmc, ipmi_entity_t *ent);
+void ipmi_domain_oem_new_entity(ipmi_domain_t *domain, ipmi_entity_t *ent);
 
 /* The event state data structure. */
 struct ipmi_event_state_s
@@ -179,14 +179,18 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_MALLOC	(__ipmi_log_mask & DEBUG_MALLOC_BIT)
 #define DEBUG_MALLOC_ENABLE() __ipmi_log_mask |= DEBUG_MALLOC_BIT
 
+/* Lock/unlock the entities for the given domain. */
+void ipmi_domain_entity_lock(ipmi_domain_t *domain);
+void ipmi_domain_entity_unlock(ipmi_domain_t *domain);
+
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */
-void __ipmi_check_mc_lock(ipmi_mc_t *mc);
-#define CHECK_MC_LOCK(mc) __ipmi_check_mc_lock(mc)
+void __ipmi_check_domain_lock(ipmi_domain_t *domain);
+#define CHECK_DOMAIN_LOCK(domain) __ipmi_check_domain_lock(domain)
 void __ipmi_check_entity_lock(ipmi_entity_t *entity);
 #define CHECK_ENTITY_LOCK(entity) __ipmi_check_entity_lock(entity)
-void __ipmi_check_mc_entity_lock(ipmi_mc_t *mc);
-#define CHECK_MC_ENTITY_LOCK(entity) __ipmi_check_mc_entity_lock(mc)
+void __ipmi_check_domain_entity_lock(ipmi_domain_t *domain);
+#define CHECK_DOMAIN_ENTITY_LOCK(domain) __ipmi_check_domain_entity_lock(domain)
 void __ipmi_check_sensor_lock(ipmi_sensor_t *sensor);
 #define CHECK_SENSOR_LOCK(sensor) __ipmi_check_sensor_lock(sensor)
 void __ipmi_check_control_lock(ipmi_control_t *control);
@@ -196,9 +200,9 @@ void ipmi_report_lock_error(os_handler_t *handler, char *str);
 								    str)
 void ipmi_check_lock(ipmi_lock_t *lock, char *str);
 #else
-#define CHECK_MC_LOCK(mc) do {} while (0)
+#define CHECK_DOMAIN_LOCK(domain) do {} while (0)
 #define CHECK_ENTITY_LOCK(entity) do {} while (0)
-#define CHECK_MC_ENTITY_LOCK(entity) do {} while (0)
+#define CHECK_DOMAIN_ENTITY_LOCK(domain) do {} while (0)
 #define CHECK_SENSOR_LOCK(sensor) do {} while (0)
 #define CHECK_CONTROL_LOCK(control) do {} while (0)
 #define IPMI_REPORT_LOCK_ERROR(handler, str) do {} while (0)

@@ -1154,24 +1154,6 @@ ipmi_bmc_enable_events(ipmi_mc_t *bmc)
 }
 
 
-int
-ipmi_send_response(ipmi_mc_t  *mc,
-		   ipmi_msg_t *msg,
-		   long       sequence)
-{
-    int        rv;
-    ipmi_con_t *ipmi;
-
-    CHECK_MC_LOCK(mc);
-
-    ipmi = mc->bmc_mc->bmc->conn;
-    rv = ipmi->send_response(ipmi, 
-			     &(mc->addr), mc->addr_len,
-			     msg, sequence);
-
-    return rv;
-}
-
 typedef struct ipmi_addr_info_s
 {
     ipmi_addr_t *addr;
@@ -1214,44 +1196,6 @@ ll_cmd_handler(ipmi_con_t   *ipmi,
 	/* FIXME - send error response. */
     }
     ipmi_unlock(bmc->bmc->mc_list_lock);
-}
-
-int
-ipmi_register_for_command(ipmi_mc_t              *mc,
-			  unsigned char          netfn,
-			  unsigned char          cmd,
-			  ipmi_command_handler_t handler,
-			  void                   *cmd_data)
-{
-    int        rv;
-    ipmi_con_t *ipmi;
-
-    CHECK_MC_LOCK(mc);
-
-    ipmi = mc->bmc_mc->bmc->conn;
-
-    rv = ipmi->register_for_command(ipmi, netfn, cmd, ll_cmd_handler,
-				    cmd_data, handler, mc->bmc_mc);
-
-    return rv;
-}
-
-/* Remove the registration for a command. */
-int
-ipmi_deregister_for_command(ipmi_mc_t     *mc,
-			    unsigned char netfn,
-			    unsigned char cmd)
-{
-    int        rv;
-    ipmi_con_t *ipmi;
-
-    CHECK_MC_LOCK(mc);
-
-    ipmi = mc->bmc_mc->bmc->conn;
-
-    rv = ipmi->deregister_for_command(ipmi, netfn, cmd);
-
-    return rv;
 }
 
 /* Closing a connection is subtle because of locks.  We schedule it to
