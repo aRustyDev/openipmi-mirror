@@ -1,3 +1,7 @@
+2004-08-19 Andrew Cress <andrew.r.cress@intel.com>
+
+	* lib/oem_intel.c: Handle different bus ids for alarm panel.
+
 2004-08-11 Erwan Velu <erwan@mandrakesoft.com>
 
 	* lanserv/lanserv_config.c: Print the line number of errors.
