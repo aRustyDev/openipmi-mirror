@@ -3,6 +3,9 @@
 	* lib/oem_atca.c: Added a control for getting the address
 	information of an ATCA FRU.
 
+	* lib/oem_atca.c: Added entity id strings for all ATCA entities
+	that OpenIPMI deals with.
+
 	* configure.in: Move to version 1.3.9.
 
 2004-06-03 Corey Minyard <cminyard@mvista.com> 
