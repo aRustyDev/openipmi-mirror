@@ -2114,6 +2114,8 @@ add_address_control(atca_shelf_t *info, atca_ipmc_t *ipmc)
 	goto out;
     }
 
+    /* Ignore the address control for presence. */
+    ipmi_control_set_ignore_if_no_entity(ipmc->address_control, 1);
     
     rv = atca_add_control(si_mc,
 			  &ipmc->address_control,
@@ -2493,6 +2495,10 @@ atca_entity_update_handler(enum ipmi_update_e op,
 		     ENTITY_NAME(entity), rv);
 	}
 	ipmi_entity_set_oem_info(entity, finfo, NULL);
+
+	/* If the entity isn't set up yet but is present, handle that. */
+	if (!finfo->cold_reset && ipmi_entity_is_present(entity))
+	    add_fru_controls(finfo);
 	break;
 
     case IPMI_DELETED:

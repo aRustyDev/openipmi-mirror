@@ -1,3 +1,19 @@
+2005-02-24 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Ignore controls and sensors for presence if they
+	are supposed to be ignored when the entity is not present.  I
+	think I previously misunderstood this bit (not like it is well
+	explained, anyway).
+	
+	* lib/sensor.c, lib/control.c: Make oem sensors and controls not
+	ignored when the entity is not present.
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/oem_test.c: ditto
+	* lib/oem_intel.c: ditto
+
+	* lib/oem_atca.c: Set address controls to be ignored if the entity
+	is not present.
+
 2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Added a physical slot number attribute for
