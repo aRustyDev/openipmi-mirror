@@ -1,6 +1,9 @@
-2004-03-25 Corey Minyard <cminyard@mvista.com> 
+2004-03-26 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Turn off nonblocking mode on the write fd.
+
+	* lib/sensor.c: Alloc a handler_list for each sensor for type 2
+	sensors records.
 
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
