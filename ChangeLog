@@ -20,6 +20,8 @@
 	* lib/oem_motorola_mxp.c, lib/oem_atca.c: Cleanup up all the
 	ignore if no entity setup for all the sensors and controls.
 
+	* configure.in: Move to version 1.3.16.
+
 2004-12-28 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Changes the sensor event handlers to use the add

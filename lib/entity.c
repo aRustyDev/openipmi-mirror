@@ -1302,6 +1302,7 @@ typedef struct ent_active_detect_s
 {
     ipmi_entity_id_t ent_id;
     int              try_count;
+    int              done_count;
     int              present;
     unsigned int     start_presence_event_count;
     ipmi_msg_t       *msg;
@@ -1430,8 +1431,8 @@ detect_control_val(ipmi_control_t *control,
     if (!err)
 	info->present = 1;
 
-    info->try_count--;
-    if (info->try_count == 0) {
+    info->done_count++;
+    if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
 	    ipmi_mem_free(info);
     }
@@ -1448,8 +1449,8 @@ detect_control_light(ipmi_control_t       *control,
     if (!err)
 	info->present = 1;
 
-    info->try_count--;
-    if (info->try_count == 0) {
+    info->done_count++;
+    if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
 	    ipmi_mem_free(info);
     }
@@ -1467,8 +1468,8 @@ detect_control_id(ipmi_control_t *control,
     if (!err)
 	info->present = 1;
 
-    info->try_count--;
-    if (info->try_count == 0) {
+    info->done_count++;
+    if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
 	    ipmi_mem_free(info);
     }
@@ -1486,8 +1487,8 @@ detect_control_display(ipmi_control_t *control,
     if (!err)
 	info->present = 1;
 
-    info->try_count--;
-    if (info->try_count == 0) {
+    info->done_count++;
+    if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
 	    ipmi_mem_free(info);
     }
@@ -1501,6 +1502,8 @@ control_detect_send(ipmi_entity_t  *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
+    info->try_count++;
+
     rv = ipmi_control_get_val(control, detect_control_val, info);
     if (rv)
 	rv = ipmi_control_get_light(control, detect_control_light, info);
@@ -1511,24 +1514,28 @@ control_detect_send(ipmi_entity_t  *ent,
 					     detect_control_display,
 					     info);
 
-    if (!rv)
-	info->try_count++;
+    if (rv)
+	info->try_count--;
 }
 
 static int
-try_presence_controls(ipmi_entity_t *ent, ent_active_detect_t *detect)
+try_presence_controls(ipmi_entity_t *ent, ent_active_detect_t *info)
 {
     if (ilist_empty(ent->controls))
 	return ENOSYS;
 
     /* It has sensors, try to see if any of those are active. */
-    detect->try_count = 0;
-    ipmi_entity_iterate_controls(ent, control_detect_send, detect);
+    info->try_count = 1;
+    info->done_count = 0;
+    ipmi_entity_iterate_controls(ent, control_detect_send, info);
 
     /* I couldn't message any sensors, go on. */
-    if (detect->try_count == 0) {
+    if (info->try_count == 1)
 	return ENOSYS;
-    }
+
+    info->done_count++;
+    if (info->try_count == info->done_count)
+	control_detect_handler(ent, info);
 
     return 0;
 }
@@ -1575,8 +1582,8 @@ detect_states_read(ipmi_sensor_t *sensor,
     if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
-    info->try_count--;
-    if (info->try_count == 0) {
+    info->done_count++;
+    if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, sensor_detect_handler, info))
 	    ipmi_mem_free(info);
     }
@@ -1596,8 +1603,8 @@ detect_reading_read(ipmi_sensor_t             *sensor,
     if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
-    info->try_count--;
-    if (info->try_count == 0) {
+    info->done_count++;
+    if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, sensor_detect_handler, info))
 	    ipmi_mem_free(info);
     }
@@ -1611,28 +1618,33 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
+    info->try_count++;
     rv = ipmi_reading_get(sensor, detect_reading_read, info);
     if (rv)
 	rv = ipmi_states_get(sensor, detect_states_read, info);
 
-    if (!rv)
-	info->try_count++;
+    if (rv)
+	info->try_count--;
 }
 
 static int
-try_presence_sensors(ipmi_entity_t *ent, ent_active_detect_t *detect)
+try_presence_sensors(ipmi_entity_t *ent, ent_active_detect_t *info)
 {
     if (ilist_empty(ent->sensors))
 	return ENOSYS;
 
-    detect->try_count = 0;
+    info->try_count = 1;
+    info->done_count = 0;
 
-    ipmi_entity_iterate_sensors(ent, sensor_detect_send, detect);
+    ipmi_entity_iterate_sensors(ent, sensor_detect_send, info);
 
     /* I couldn't message any sensors, go on. */
-    if (detect->try_count == 0) {
+    if (info->try_count == 1)
 	return ENOSYS;
-    }
+
+    info->done_count++;
+    if (info->try_count == info->done_count)
+	sensor_detect_handler(ent, info);
 
     return 0;
 }
@@ -1663,7 +1675,6 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	    return;
 	detect->start_presence_event_count = ent->presence_event_count;
 	detect->ent_id = ipmi_entity_convert_to_id(ent);
-	detect->try_count = 0;
 	detect->present = 0;
 
 	if (! try_presence_sensors(ent, detect)) {
