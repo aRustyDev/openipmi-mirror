@@ -1,3 +1,9 @@
+2004-08-20 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_intel.c: Fixed some problems with the alarm panel,
+	modified to add the controls and entities at the right time and
+	to handle removal of the MC properly.
+
 2004-08-19 Andrew Cress <andrew.r.cress@intel.com>
 
 	* lib/oem_intel.c: Handle different bus ids for alarm panel.
