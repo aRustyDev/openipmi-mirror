@@ -6800,8 +6800,9 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 	return;
     }
 
+    domains[dnum] = ipmi_domain_convert_to_id(domain);
     if (!first_init) {
-	domain_id = ipmi_domain_convert_to_id(domain);
+	domain_id = domains[dnum];
 	first_init = 1;
     }
 
