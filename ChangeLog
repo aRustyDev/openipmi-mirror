@@ -1,3 +1,13 @@
+2004-03-19 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in, include/OpenIPMI/ipmiif.h.in: Completele rework
+	the version handling so that major, minor, release, and extra
+	version information are separately available for #ifdeff-ing.
+
+	* ui/ui.c: Use OPENIPMI_VERSION for the version string.
+
+	* configure.in: Move to version 1.2.21
+
 2004-03-12 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Changed the return value
