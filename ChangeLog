@@ -17,6 +17,10 @@
 	* lib/sensor.c: Fix a problem with handling sensor state fetches
 	that didn't have optional bytes.
 
+	* lib/oem_atca.c, lib/oem_atca_conn.c: Modify fetching the shelf
+	FRU to try the ECN 1.1 version first.  Commented out some
+	Intel-specific hacks as the shelf gets better.
+
 2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Added a physical slot number attribute for

@@ -3315,7 +3315,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	prod_id = ipmi_mc_product_id(mc);
 	if ((mfg_id == 0x000157) && (prod_id == 0x0841)) {
 	    /* info->shelf_address_only_on_bmc = 1; */
-	    info->allow_sel_on_any = 1;
+	    /* info->allow_sel_on_any = 1; */
 	}
 	_ipmi_mc_put(mc);
     }
@@ -3326,7 +3326,11 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     info->shelf_fru_ipmb = get_addr->data[3];
     info->shelf_fru_device_id = get_addr->data[5];
 
-    info->curr_shelf_fru = 1;
+    /* We don't fetch the shelf FRU from the slelf FRU devices at
+       first. We fetch it from the shelf manager (per the ECN 1.1
+       spec, it's at 0xfe on the shelf manager).  If that fails, we go
+       onto shelf FRUs. */
+    info->curr_shelf_fru = 0;
 
     if (info->shelf_address_only_on_bmc)
 	info->shelf_fru_ipmb = 0x20;
@@ -3341,10 +3345,11 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	goto out;
     }
 
+    /* Per ECN, FRU data is on a shelf manager FRU id 254 */
     rv = ipmi_fru_alloc_notrack(domain,
 				1,
-				info->shelf_fru_ipmb,
-				1,
+				0x20,
+				254,
 				0,
 				0,
 				0,
