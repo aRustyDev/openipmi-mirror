@@ -6501,8 +6501,8 @@ amc_slot_ga_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    control_info->min_rsp_length = 6;
-    control_info->data_off = 5;
+    control_info->min_rsp_length = 7;
+    control_info->data_off = 6;
     control_info->data_len = 1;
     control_info->mc = ipmi_control_get_mc(control);
     control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
