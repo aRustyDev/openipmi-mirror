@@ -974,9 +974,22 @@ presence_changed(ipmi_entity_t *ent,
 
 	handled = handle_hot_swap_presence(ent, present, event);
 
-	/* When the board becomes present, fetch it's FRUs. */
-	if (present && ipmi_entity_get_is_fru(ent) && (ent->fru == NULL))
-	    ipmi_entity_fetch_frus(ent);
+	/* When the entity becomes present or absent, fetch or destroy
+	   its FRUs. */
+	if (ipmi_entity_get_is_fru(ent)) {
+	    if (present) {
+		ipmi_entity_fetch_frus(ent);
+	    } else if (ent->fru != NULL) {
+		ipmi_fru_t *fru;
+
+		fru = ent->fru;
+		ent->fru = NULL;
+		ipmi_fru_destroy(fru, NULL, NULL);
+
+		if (ent->fru_handler)
+		    ent->fru_handler(IPMI_DELETED, ent, ent->fru_cb_data);
+	    }
+	}
 	if (ent->presence_handler) {
 	    ent->presence_handler(ent, present, ent->presence_cb_data, event);
 	    handled = IPMI_EVENT_HANDLED;
@@ -1526,21 +1539,6 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
     *bit_offset = bit;
 
     return 1;
-}
-
-typedef struct sensor_update_s
-{
-    enum ipmi_update_e op;
-    ipmi_entity_t      *entity;
-    ipmi_sensor_t      *sensor;
-} sensor_update_t;
-
-static void call_sensor_handler(void *data, void *cb_data1, void *cb_data2)
-{
-    sensor_update_t       *info = data;
-    ipmi_entity_sensor_cb handler = cb_data1;
-
-    handler(info->op, info->entity, info->sensor, cb_data2);
 }
 
 void
