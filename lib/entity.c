@@ -36,6 +36,7 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_entity.h>
 #include <OpenIPMI/ipmi_bits.h>
+#include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -156,7 +157,7 @@ struct ipmi_entity_s
        mainly for other SDRs that reference this entity). */
     unsigned int ref_count;
 
-    ilist_t *sub_entities;
+    ilist_t *child_entities;
     ilist_t *parent_entities;
 
     ilist_t *sensors;
@@ -375,7 +376,7 @@ entity_final_destroy(ipmi_entity_t *ent)
 {
     if ((ent->running_timer_count != 0)
 	|| (opq_stuff_in_progress(ent->waitq))
-	|| (! ilist_empty(ent->sub_entities))
+	|| (! ilist_empty(ent->child_entities))
 	|| (! ilist_empty(ent->parent_entities)))
     {
 	ipmi_unlock(ent->timer_lock);
@@ -397,7 +398,7 @@ entity_final_destroy(ipmi_entity_t *ent)
 	opq_destroy(ent->waitq);
 
     free_ilist(ent->parent_entities);
-    free_ilist(ent->sub_entities);
+    free_ilist(ent->child_entities);
     free_ilist(ent->sensors);
     free_ilist(ent->controls);
     ilist_twoitem_destroy(ent->hot_swap_handlers);
@@ -480,7 +481,7 @@ cleanup_entity(ipmi_entity_t *ent)
     /* First see if the entity is ready for cleanup. */
     if ((ent->ref_count)
 	|| (ent->presence_sensor)
-	|| (!ilist_empty(ent->sub_entities))
+	|| (!ilist_empty(ent->child_entities))
 	|| (!ilist_empty(ent->parent_entities))
 	|| (!ilist_empty(ent->sensors))
 	|| (!ilist_empty(ent->controls)))
@@ -700,8 +701,8 @@ entity_add(ipmi_entity_info_t *ents,
     ent->os_hnd = ipmi_domain_get_os_hnd(ent->domain);
     ent->domain_id = ents->domain_id;
     ent->seq = ipmi_get_seq();
-    ent->sub_entities = alloc_ilist();
-    if (!ent->sub_entities)
+    ent->child_entities = alloc_ilist();
+    if (!ent->child_entities)
 	goto out_err;
 
     ent->parent_entities = alloc_ilist();
@@ -814,8 +815,8 @@ entity_add(ipmi_entity_info_t *ents,
 	free_ilist(ent->sensors);
     if (ent->parent_entities)
 	free_ilist(ent->parent_entities);
-    if (ent->sub_entities)
-	free_ilist(ent->sub_entities);
+    if (ent->child_entities)
+	free_ilist(ent->child_entities);
     ipmi_mem_free(ent);
     return ENOMEM;
 }
@@ -894,7 +895,7 @@ add_child(ipmi_entity_t       *ent,
     entity_child_link_t            *link;
     ent_info_update_handler_info_t info;
 
-    link = ilist_search(ent->sub_entities, search_child, child);
+    link = ilist_search(ent->child_entities, search_child, child);
     if (link != NULL)
 	goto found;
 
@@ -909,7 +910,7 @@ add_child(ipmi_entity_t       *ent,
 
     link->child = child;
 
-    ilist_add_tail(ent->sub_entities, link, &link->child_link);
+    ilist_add_tail(ent->child_entities, link, &link->child_link);
     ilist_add_tail(child->parent_entities, ent, &link->parent_link);
 
     ent->presence_possibly_changed = 1;
@@ -961,7 +962,7 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
     CHECK_ENTITY_LOCK(ent);
     CHECK_ENTITY_LOCK(child);
 
-    ilist_init_iter(&iter, ent->sub_entities);
+    ilist_init_iter(&iter, ent->child_entities);
     ilist_unpositioned(&iter);
 
     /* Find the child in the parent's list. */
@@ -1031,7 +1032,7 @@ ipmi_entity_iterate_children(ipmi_entity_t                *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    ilist_iter(ent->sub_entities, iterate_child_handler, &info);
+    ilist_iter(ent->child_entities, iterate_child_handler, &info);
 }
 
 typedef struct iterate_parent_info_s
@@ -1066,9 +1067,6 @@ ipmi_entity_iterate_parents(ipmi_entity_t                 *ent,
  *
  **********************************************************************/
 
-static void presence_parent_handler(ipmi_entity_t *ent,
-				    ipmi_entity_t *parent,
-				    void          *cb_data);
 static int handle_hot_swap_presence(ipmi_entity_t  *ent,
 				    int            present,
 				    ipmi_event_t   *event);
@@ -1116,6 +1114,20 @@ static void call_presence_handler(void *data, void *cb_data1, void *cb_data2)
 	info->handled = handled;
 	info->event = NULL;
     }
+}
+
+/* This is for iterating the parents when a sensor's presence changes.
+   The parent's presence may depend on it's childrens' presence, if it
+   has no sensors. */
+static void
+presence_parent_handler(ipmi_entity_t *ent,
+			ipmi_entity_t *parent,
+			void          *cb_data)
+{
+    /* We only set the entity to check presence.  We can't use the
+       child directly because the algorithm is unfortunately
+       complicated. */
+    parent->presence_possibly_changed = 1;
 }
 
 static void
@@ -1196,44 +1208,6 @@ presence_child_handler(ipmi_entity_t *ent,
 
     if (child->present)
 	*present = 1;
-}
-
-/* This is for iterating the parents when a sensor's presence changes.
-   The parent's presence may depend on it's childrens' presence, if it
-   has no sensors. */
-static void
-presence_parent_handler(ipmi_entity_t *ent,
-			ipmi_entity_t *parent,
-			void          *cb_data)
-{
-    int present = 0;
-    unsigned int *start_presence_event_count = cb_data;
-
-    if (ent && !ilist_empty(parent->sensors))
-	/* The parent has sensors, so it doesn't depend on the children
- 	   for presence.  Note that we check for ent here because that
- 	   means an actual child is present, which is the only case we
- 	   care about here.  Other paths to this code don't have a
- 	   child entity, and we always want to run the code below in
- 	   that case. */
-	return;
-
-    /* If any children are present, then the parent is present. */
-    ipmi_entity_iterate_children(parent, presence_child_handler, &present);
-    if ((!present)
-	&& start_presence_event_count
-	&& (*start_presence_event_count != parent->presence_event_count))
-    {
-	/* If the entity is not present and something else has changed
-	   the presence since re started the presence detection
-	   process, then don't change the value.  There are races
-	   where the entity could have been set present and we detect
-	   it as not present.  However, it is not possible to detect
-	   it as present and for something else to set it not
-	   present. */
-	return;
-    }
-    presence_changed(parent, present, NULL);
 }
 
 static int
@@ -1327,21 +1301,267 @@ typedef struct ent_detect_info_s
 typedef struct ent_active_detect_s
 {
     ipmi_entity_id_t ent_id;
-    int              sensor_try_count;
+    int              try_count;
     int              present;
     unsigned int     start_presence_event_count;
+    ipmi_msg_t       *msg;
 } ent_active_detect_t;
 
 static void
-sensor_read_handler(ipmi_entity_t *ent, void *cb_data)
+detect_frudev_handler(ipmi_entity_t *ent, void *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+
+    if (info->start_presence_event_count != ent->presence_event_count) {
+	/* Something else has changed the presence since we started
+	   the presence detection process, then don't change the
+	   value.  There are races where the entity could have been
+	   set present and we detect it as not present.  However, it
+	   is not possible to detect it as present and for something
+	   else to set it not present. */
+	ipmi_mem_free(info);
+	return;
+    }
+
+    if (info->msg->data[0])
+	presence_changed(ent, 0, NULL);
+    else
+	presence_changed(ent, 1, NULL);
+
+    ipmi_mem_free(info);
+}
+    
+static void
+detect_frudev(ipmi_mc_t  *mc,
+	      ipmi_msg_t *rsp,
+	      void       *rsp_data)
+{
+    ent_active_detect_t *info = rsp_data;
+
+    info->msg = rsp;
+    if (ipmi_entity_pointer_cb(info->ent_id, detect_frudev_handler, info))
+	ipmi_mem_free(info);
+}
+
+/* This is the end of the line on checks.  We have to report something
+   here. */
+static void
+try_presence_frudev(ipmi_entity_t *ent, ent_active_detect_t *info)
+{
+    ipmi_msg_t    msg;
+    unsigned char data[1];
+    int           rv;
+
+    if ((!ent->frudev_present) || (!ent->frudev_active)) {
+	presence_changed(ent, 0, NULL);
+	ipmi_mem_free(info);
+	return;
+    }
+
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_GET_FRU_INVENTORY_AREA_INFO_CMD;
+    msg.data = data;
+    data[1] = ent->info.fru_device_id; /* Will be 0 for MCs, so this
+					  is ok even though it is not
+					  in the MC record. */
+    msg.data_len = 1;
+
+    /* Send a message to the FRU device and see if we can get some
+       data. */
+    rv = ipmi_mc_send_command(ent->frudev_mc, ent->info.lun, &msg,
+			      detect_frudev, info);
+    if (rv) {
+	presence_changed(ent, 0, NULL);
+	ipmi_mem_free(info);
+    }
+}
+
+static int
+try_presence_children(ipmi_entity_t *parent, ent_active_detect_t *info)
+{
+    int present = 0;
+
+    if (ilist_empty(parent->child_entities))
+	return ENOSYS;
+
+    ipmi_entity_iterate_children(parent, presence_child_handler, &present);
+    presence_changed(parent, present, NULL);
+    ipmi_mem_free(info);
+    return 0;
+}
+
+static void
+control_detect_handler(ipmi_entity_t *ent, void *cb_data)
 {
     ent_active_detect_t *info = cb_data;
     
-    if (!info->present)
+    if (info->start_presence_event_count != ent->presence_event_count) {
+	/* Something else has changed the presence since we started
+	   the presence detection process, then don't change the
+	   value.  There are races where the entity could have been
+	   set present and we detect it as not present.  However, it
+	   is not possible to detect it as present and for something
+	   else to set it not present. */
+	ipmi_mem_free(info);
+	return;
+    }
+
+    if (!info->present) {
 	/* Nothing present from the sensors, try the children. */
-	presence_parent_handler(NULL, ent, &info->start_presence_event_count);
-    else
+	if (! try_presence_children(ent, info)) {
+	    /* Children got it, nothing to do */
+	} else {
+	    try_presence_frudev(ent, info);
+	}
+    } else {
 	presence_changed(ent, info->present, NULL);
+	ipmi_mem_free(info);
+    }
+}
+
+static void
+detect_control_val(ipmi_control_t *control,
+		   int            err,
+		   int            *val,
+		   void           *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+
+    if (!err)
+	info->present = 1;
+
+    info->try_count--;
+    if (info->try_count == 0) {
+	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
+	    ipmi_mem_free(info);
+    }
+}
+
+static void
+detect_control_light(ipmi_control_t       *control,
+		     int                  err,
+		     ipmi_light_setting_t *settings,
+		     void                 *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+
+    if (!err)
+	info->present = 1;
+
+    info->try_count--;
+    if (info->try_count == 0) {
+	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
+	    ipmi_mem_free(info);
+    }
+}
+
+static void
+detect_control_id(ipmi_control_t *control,
+		  int            err,
+		  unsigned char  *val,
+		  int            length,
+		  void           *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+
+    if (!err)
+	info->present = 1;
+
+    info->try_count--;
+    if (info->try_count == 0) {
+	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
+	    ipmi_mem_free(info);
+    }
+}
+
+static void
+detect_control_display(ipmi_control_t *control,
+		       int            err,
+		       char           *str,
+		       unsigned int   len,
+		       void           *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+
+    if (!err)
+	info->present = 1;
+
+    info->try_count--;
+    if (info->try_count == 0) {
+	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
+	    ipmi_mem_free(info);
+    }
+}
+
+static void
+control_detect_send(ipmi_entity_t  *ent,
+		    ipmi_control_t *control,
+		    void           *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+    int                 rv;
+
+    rv = ipmi_control_get_val(control, detect_control_val, info);
+    if (rv)
+	rv = ipmi_control_get_light(control, detect_control_light, info);
+    if (rv)
+	rv = ipmi_control_identifier_get_val(control, detect_control_id, info);
+    if (rv)
+	rv = ipmi_control_get_display_string(control, 0, 0, 1,
+					     detect_control_display,
+					     info);
+
+    if (!rv)
+	info->try_count++;
+}
+
+static int
+try_presence_controls(ipmi_entity_t *ent, ent_active_detect_t *detect)
+{
+    if (ilist_empty(ent->controls))
+	return ENOSYS;
+
+    /* It has sensors, try to see if any of those are active. */
+    detect->try_count = 0;
+    ipmi_entity_iterate_controls(ent, control_detect_send, detect);
+
+    /* I couldn't message any sensors, go on. */
+    if (detect->try_count == 0) {
+	return ENOSYS;
+    }
+
+    return 0;
+}
+
+static void
+sensor_detect_handler(ipmi_entity_t *ent, void *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+    
+    if (info->start_presence_event_count != ent->presence_event_count) {
+	/* Something else has changed the presence since we started
+	   the presence detection process, then don't change the
+	   value.  There are races where the entity could have been
+	   set present and we detect it as not present.  However, it
+	   is not possible to detect it as present and for something
+	   else to set it not present. */
+	ipmi_mem_free(info);
+	return;
+    }
+
+    if (!info->present) {
+	/* Nothing present from the sensors, try other stuff. */
+	if (! try_presence_controls(ent, info)) {
+	    /* Controls got it, nothing to do */
+	} else if (! try_presence_children(ent, info)) {
+	    /* Children got it, nothing to do */
+	} else {
+	    try_presence_frudev(ent, info);
+	}
+    } else {
+	presence_changed(ent, info->present, NULL);
+	ipmi_mem_free(info);
+    }
 }
 
 static void
@@ -1355,10 +1575,10 @@ detect_states_read(ipmi_sensor_t *sensor,
     if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
-    info->sensor_try_count--;
-    if (info->sensor_try_count == 0) {
-	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
-	ipmi_mem_free(info);
+    info->try_count--;
+    if (info->try_count == 0) {
+	if (ipmi_entity_pointer_cb(info->ent_id, sensor_detect_handler, info))
+	    ipmi_mem_free(info);
     }
 }
 
@@ -1376,10 +1596,10 @@ detect_reading_read(ipmi_sensor_t             *sensor,
     if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
-    info->sensor_try_count--;
-    if (info->sensor_try_count == 0) {
-	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
-	ipmi_mem_free(info);
+    info->try_count--;
+    if (info->try_count == 0) {
+	if (ipmi_entity_pointer_cb(info->ent_id, sensor_detect_handler, info))
+	    ipmi_mem_free(info);
     }
 }
 
@@ -1391,18 +1611,30 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
-    /* If the sensor should *not* be ignored if there is no entity,
-       then it shouldn't be considered for presence detection, since
-       it may be there even if the entity is not present. */
-    if (! ipmi_sensor_get_ignore_if_no_entity(sensor))
-	return;
-
     rv = ipmi_reading_get(sensor, detect_reading_read, info);
     if (rv)
 	rv = ipmi_states_get(sensor, detect_states_read, info);
 
     if (!rv)
-	info->sensor_try_count++;
+	info->try_count++;
+}
+
+static int
+try_presence_sensors(ipmi_entity_t *ent, ent_active_detect_t *detect)
+{
+    if (ilist_empty(ent->sensors))
+	return ENOSYS;
+
+    detect->try_count = 0;
+
+    ipmi_entity_iterate_sensors(ent, sensor_detect_send, detect);
+
+    /* I couldn't message any sensors, go on. */
+    if (detect->try_count == 0) {
+	return ENOSYS;
+    }
+
+    return 0;
 }
 
 static void
@@ -1425,33 +1657,27 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but presence. */
 	rv = ipmi_states_get(ent->presence_bit_sensor, states_bit_read, ent);
-    } else if ((ent->frudev_present) && (ent->frudev_active)) {
-	/* Even though the spec lists the frudev check last, since
-	   these are an "or" relationship except for the presence
-	   bits, and this is the simplest check, we do it first. */
-	presence_changed(ent, ent->frudev_active, NULL);
-    } else if (! ilist_empty(ent->sensors)) {
-	/* It has sensors, try to see if any of those are active. */
+    } else {
 	detect = ipmi_mem_alloc(sizeof(*detect));
 	if (!detect)
 	    return;
-
 	detect->start_presence_event_count = ent->presence_event_count;
-    	detect->ent_id = ipmi_entity_convert_to_id(ent);
-	detect->sensor_try_count = 0;
+	detect->ent_id = ipmi_entity_convert_to_id(ent);
+	detect->try_count = 0;
 	detect->present = 0;
-	ipmi_entity_iterate_sensors(ent, sensor_detect_send, detect);
 
-	/* I couldn't message any sensors, the thing must be gone. */
-	if (detect->sensor_try_count == 0) {
-	    ipmi_mem_free(detect);
-
-	    /* Try the children last. */
-	    presence_parent_handler(NULL, ent, NULL);
+	if (! try_presence_sensors(ent, detect)) {
+	    /* Success with sensors, nothing to do */
+	} else if (! try_presence_controls(ent, detect)) {
+	    /* Note that controls are not technically part of the spec,
+	       but since we have them we use them for presence
+	       detection. */
+	    /* Success with controls, nothing to do */
+	} else if (! try_presence_children(ent, detect)) {
+	    /* Success with children, nothing to do */
+	} else {
+	    try_presence_frudev(ent, detect);
 	}
-    } else {
-	/* Maybe it has children that can handle it's presence. */
-	presence_parent_handler(NULL, ent, NULL);
     }
 }
 
@@ -1482,10 +1708,15 @@ entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data)
 
     if (ent->frudev_active != active) {
 	ent->frudev_active = active;
-	/* Only detect presence if there is not a presence sensor,
-	   since they override everything else. */
-	if ((!ent->presence_sensor) && (!ent->presence_bit_sensor))
+	/* Only detect with frudev if there are no other
+	   presence-detecting things there. */
+	if ((!ent->presence_sensor) && (!ent->presence_bit_sensor)
+	    && ilist_empty(ent->controls)
+	    && ilist_empty(ent->sensors)
+	    && ilist_empty(ent->child_entities))
+	{
 	    ipmi_detect_entity_presence_change(ent, 1);
+	}
     }
 }
 
@@ -1895,7 +2126,9 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     link->sensor_ptr = sensor;
     link->list_link.malloced = 0;
 
-    if (is_presence_sensor(sensor) && (ent->presence_sensor == NULL)) {
+    if (is_presence_sensor(sensor) && (ent->presence_sensor == NULL)
+	&& (ent->presence_bit_sensor == NULL))
+    {
 	/* It's the presence sensor and we don't already have one.  We
 	   keep this special. */
 	ent->presence_sensor = sensor;
@@ -1920,8 +2153,9 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	}
 	ilist_add_tail(ent->sensors, link, &(link->list_link));
 	
-	call_sensor_handlers(ent, sensor, IPMI_ADDED);
 	ent->presence_possibly_changed = 1;
+
+	call_sensor_handlers(ent, sensor, IPMI_ADDED);
     }
 }
 
@@ -1989,13 +2223,50 @@ static int sens_cmp_if_presence_bit(void *item, void *cb_data)
     return info->is_presence;
 }
 
+static void
+check_for_another_presence_sensor(ipmi_entity_t *ent)
+{
+    ipmi_sensor_ref_t *ref;
+    ilist_iter_t      iter;
+    sens_cmp_info_t   info;
+
+    /* See if there is another presence sensor. */
+    ilist_init_iter(&iter, ent->sensors);
+    ilist_unpositioned(&iter);
+    ref = ilist_search_iter(&iter, sens_cmp_if_presence, &info);
+
+    if (ref) {
+	/* There is one, delete it from the list and from the
+	   user, since we are taking it over. */
+	ilist_delete(&iter);
+
+	call_sensor_handlers(ent, info.sensor, IPMI_DELETED);
+
+	ent->presence_sensor = info.sensor;
+	handle_new_presence_sensor(ent, info.sensor);
+
+	ipmi_mem_free(ref);
+    } else {
+	/* See if there is a presence bit sensor. */
+	ent->presence_sensor = NULL;
+	ilist_init_iter(&iter, ent->sensors);
+	ilist_unpositioned(&iter);
+	info.ignore_sensor = NULL;
+	ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
+	if (ref) {
+	    ent->presence_bit_sensor = info.sensor;
+	    ent->presence_bit_offset = info.bit;
+	    handle_new_presence_bit_sensor(ent, info.sensor);
+	}
+    }
+}
+
 void
 ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 			  ipmi_sensor_t *sensor)
 {
     ipmi_sensor_ref_t *ref;
     ilist_iter_t      iter;
-    sens_cmp_info_t   info;
 
     /* Note that you *CANNOT* call ipmi_sensor_convert_to_id() (or any
        other thing like that) because the MC that the sensor belongs
@@ -2003,74 +2274,38 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    if (sensor == ent->presence_sensor) {
-	ilist_init_iter(&iter, ent->sensors);
-	ilist_unpositioned(&iter);
-
-	/* See if there is another presence sensor. */
-	ref = ilist_search_iter(&iter, sens_cmp_if_presence, &info);
-
-	if (ref) {
-	    /* There is one, delete it from the list and from the
-	       user, since we are taking it over. */
-	    ilist_delete(&iter);
-
-	    call_sensor_handlers(ent, sensor, IPMI_DELETED);
-
-	    ent->presence_sensor = info.sensor;
-	    handle_new_presence_sensor(ent, info.sensor);
-
-	    ipmi_mem_free(ref);
-	} else {
-	    /* See if there is a presence bit sensor. */
-	    ent->presence_sensor = NULL;
-	    ilist_init_iter(&iter, ent->sensors);
-	    ilist_unpositioned(&iter);
-	    info.ignore_sensor = NULL;
-	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
-	    if (ref) {
-		ent->presence_bit_sensor = info.sensor;
-		ent->presence_bit_offset = info.bit;
-		handle_new_presence_bit_sensor(ent, info.sensor);
-	    }
-	}
-	ent->presence_possibly_changed = 1;
-    } else {
-	if (sensor == ent->presence_bit_sensor) {
-	    ilist_init_iter(&iter, ent->sensors);
-	    ilist_unpositioned(&iter);
-	    info.ignore_sensor = sensor;
-	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
-	    if (ref) {
-		ent->presence_bit_sensor = info.sensor;
-		ent->presence_bit_offset = info.bit;
-		handle_new_presence_bit_sensor(ent, info.sensor);
-	    } else
-		ent->presence_bit_sensor = NULL;
-	}
-
-	if (sensor == ent->hot_swap_requester) {
-	    ent->hot_swap_requester = NULL;
-	}
-
-	ilist_init_iter(&iter, ent->sensors);
-	ilist_unpositioned(&iter);
-	ref = ilist_search_iter(&iter, sens_cmp, sensor);
-	if (!ref) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%sentity.c(ipmi_entity_remove_sensor):"
-		     " Removal of a sensor from an entity was requested,"
-		     " but the sensor was not there",
-		     SENSOR_NAME(sensor));
-	    return;
-	}
-
-	ilist_delete(&iter);
-	ipmi_mem_free(ref);
-
-	call_sensor_handlers(ent, sensor, IPMI_DELETED);
+    ilist_init_iter(&iter, ent->sensors);
+    ilist_unpositioned(&iter);
+    ref = ilist_search_iter(&iter, sens_cmp, sensor);
+    if (!ref) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(ipmi_entity_remove_sensor):"
+		 " Removal of a sensor from an entity was requested,"
+		 " but the sensor was not there",
+		 SENSOR_NAME(sensor));
+	return;
     }
 
+    ilist_delete(&iter);
+    ipmi_mem_free(ref);
+
+    if (sensor == ent->hot_swap_requester) {
+	ent->hot_swap_requester = NULL;
+    }
+
+    if (sensor == ent->presence_sensor) {
+	ent->presence_sensor = NULL;
+	check_for_another_presence_sensor(ent);
+	ent->presence_possibly_changed = 1;
+    } else if (sensor == ent->presence_bit_sensor) {
+	ent->presence_bit_sensor = NULL;
+	check_for_another_presence_sensor(ent);
+	ent->presence_possibly_changed = 1;
+    } else {
+	ent->presence_possibly_changed = 1;
+    }
+
+    call_sensor_handlers(ent, sensor, IPMI_DELETED);
     cleanup_entity(ent);
 }
 
@@ -2094,6 +2329,8 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
     link->control_ptr = control;
     link->list_link.malloced = 0;
     ilist_add_tail(ent->controls, link, &(link->list_link));
+
+    ent->presence_possibly_changed = 1;
 
     call_control_handlers(ent, control, IPMI_ADDED);
 }
@@ -2143,6 +2380,8 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
 
     ilist_delete(&iter);
     ipmi_mem_free(ref);
+
+    ent->presence_possibly_changed = 1;
 
     call_control_handlers(ent, control, IPMI_DELETED);
 
@@ -3019,6 +3258,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 			found->ent->frudev_present = 1;
 			found->ent->frudev_active = ipmi_mc_is_active(mc);
 			found->ent->frudev_mc = mc;
+			found->ent->presence_possibly_changed = 1;
 		    }
 		}
 	    }
@@ -3279,7 +3519,7 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
     ilist_iter_t  iter;
     int           rv;
 
-    if (ilist_empty(ent->sub_entities))
+    if (ilist_empty(ent->child_entities))
 	return 0;
 
     memset(&sdr, 0, sizeof(sdr));
@@ -3304,9 +3544,9 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
 	sdr.data[4] = (ent->info.presence_sensor_always_there << 5);
     }
 
-    ilist_sort(ent->sub_entities, cmp_entities);
+    ilist_sort(ent->child_entities, cmp_entities);
 
-    ilist_init_iter(&iter, ent->sub_entities);
+    ilist_init_iter(&iter, ent->child_entities);
     last = NULL;
     if (ilist_first(&iter))
 	next = ilist_get(&iter);
@@ -3954,7 +4194,7 @@ ipmi_entity_get_is_parent(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ! ilist_empty(ent->sub_entities);
+    return ! ilist_empty(ent->child_entities);
 }
 
 int

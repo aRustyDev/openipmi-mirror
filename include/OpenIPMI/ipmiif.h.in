@@ -1521,6 +1521,7 @@ int ipmi_control_is_settable(ipmi_control_t *control);
 int ipmi_control_is_readable(ipmi_control_t *control);
 ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *control);
 char *ipmi_control_get_type_string(ipmi_control_t *control);
+int ipmi_control_get_ignore_if_no_entity(ipmi_control_t *control);
 
 /* Get the number of values the control supports. */
 int ipmi_control_get_num_vals(ipmi_control_t *control);
