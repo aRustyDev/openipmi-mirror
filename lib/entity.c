@@ -4301,6 +4301,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    /* Keep it if we got it, it might have some useful
 	       information. */
 	    ent->fru = info->fru;
+	call_fru_handlers(ent, IPMI_CHANGED);
     }
 }
 
