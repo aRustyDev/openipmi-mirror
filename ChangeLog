@@ -1,3 +1,9 @@
+2004-04-30 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sel.c, include/OpenIPMI/ipmi_sel.c: Added a way to get the
+	number of entries and free bytes in the SEL.
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.c: ditto
+
 2004-04-29 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sel.c: Fixed a bug in the sel get where the info allocated

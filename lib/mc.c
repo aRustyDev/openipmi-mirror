@@ -833,6 +833,24 @@ ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
     return val;
 }
 
+int
+ipmi_mc_sel_get_num_entries(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+    
+    ipmi_sel_get_num_entries(mc->sel, &val);
+    return val;
+}
+
+int
+ipmi_mc_sel_get_free_bytes(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+    
+    ipmi_sel_get_free_bytes(mc->sel, &val);
+    return val;
+}
+
 int 
 ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
 {
