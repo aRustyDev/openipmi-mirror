@@ -1,3 +1,9 @@
+2005-02-28 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: More hacks for broken hardware.
+
+	* lib/sel.c: Hacks for broken hardware.
+
 2005-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Some more fixups for the Intel chassis.
