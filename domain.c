@@ -137,10 +137,6 @@ struct ipmi_domain_s
     /* A list of connection fail handler, separate from the main one. */
     ilist_t *con_fail_handlers;
 
-    /* The main connection fail handler. */
-    ipmi_domain_cb con_fail_handler;
-    void           *con_fail_cb_data;
-
     /* A list of IPMB addresses to not scan. */
     ilist_t *ipmb_ignores;
 
@@ -462,6 +458,7 @@ ipmi_domain_validate(ipmi_domain_t *domain)
     while (c != NULL) {
 	if (c == domain)
 	    break;
+	c = c->next;
     }
     if (c == NULL)
 	return EINVAL;
@@ -1057,7 +1054,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     /* Let the OEM handler for the MC that the message came from have
        a go at it first.  Note that OEM handlers must look at the time
        themselves. */
-    if (_ipmi_mc_check_oem_event_handler(mc, event))
+    if (_ipmi_mc_check_sel_oem_event_handler(mc, event))
 	return;
 
     timestamp = ipmi_get_uint32(&(event->data[0]));
@@ -1821,6 +1818,9 @@ ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
 	return ENOMEM;
     }
 
+    if (id)
+	*id = new_id;
+
     return 0;
 }
 
@@ -1843,19 +1843,6 @@ ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
     }
 }
 
-int
-ipmi_domain_set_con_fail_handler(ipmi_domain_t  *domain,
-				 ipmi_domain_cb handler,
-				 void           *cb_data)
-{
-    CHECK_DOMAIN_LOCK(domain);
-
-    domain->con_fail_handler = handler;
-    domain->con_fail_cb_data = cb_data;
-
-    return 0;
-}
-
 typedef struct con_fail_info_s
 {
     ipmi_domain_t *domain;
@@ -1875,8 +1862,6 @@ static void
 call_con_fails(ipmi_domain_t *domain, int err)
 {
     con_fail_info_t info = {domain, err};
-    if (domain->con_fail_handler)
-	domain->con_fail_handler(domain, err, domain->con_fail_cb_data);
     ilist_iter(domain->con_fail_handlers, iterate_con_fails, &info);
 }
 
@@ -2142,9 +2127,11 @@ ll_con_failed(ipmi_con_t *ipmi,
 }
 
 int
-ipmi_init_domain(ipmi_con_t     *con,
-		 ipmi_domain_cb con_fail_handler,
-		 void           *con_fail_cb_data)
+ipmi_init_domain(ipmi_con_t             *con,
+		 ipmi_domain_cb         con_fail_handler,
+		 void                   *con_fail_cb_data,
+		 ipmi_domain_con_fail_t **con_fail_id,
+		 ipmi_domain_id_t       *new_domain)
 {
     int           rv;
     ipmi_domain_t *domain;
@@ -2153,27 +2140,32 @@ ipmi_init_domain(ipmi_con_t     *con,
     if (rv)
 	return rv;
 
-    domain->con_fail_handler = con_fail_handler;
-    domain->con_fail_cb_data = con_fail_cb_data;
-
     con->set_con_fail_handler(con, ll_con_failed, domain);
 
     ipmi_write_lock();
     add_known_domain(domain);
-    ipmi_write_unlock();
+
+    rv = ipmi_domain_add_con_fail_handler(domain, con_fail_handler,
+					  con_fail_cb_data, con_fail_id);
+    if (rv)
+	goto out_err;
 
     rv = con->start_con(con);
-    if (rv) {
-	con->set_con_fail_handler(con, NULL, NULL);
-	ipmi_write_lock();
-	remove_known_domain(domain);
-	ipmi_write_unlock();
-	cleanup_domain(domain);
-	goto out;
-    }
+    if (rv)
+	goto out_err;
+
+    if (new_domain)
+	*new_domain = ipmi_domain_convert_to_id(domain);
     
  out:
+    ipmi_write_unlock();
     return rv;
+
+ out_err:
+    con->set_con_fail_handler(con, NULL, NULL);
+    remove_known_domain(domain);
+    cleanup_domain(domain);
+    goto out;
 }
 
 /***********************************************************************

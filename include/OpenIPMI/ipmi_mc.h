@@ -184,10 +184,6 @@ int _ipmi_mc_del_event(ipmi_mc_t                 *mc,
 		       ipmi_mc_del_event_done_cb handler,
 		       void                      *cb_data);
 
-/* Set and get the OEM data pointer in the mc. */
-void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
-void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
-
 /* Check the event receiver for the MC. */
 void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
 
@@ -204,11 +200,19 @@ int _ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int _ipmi_mc_sel_count(ipmi_mc_t *mc);
 int _ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
 int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
+int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 
-int ipmi_mc_oem_new_sensor(ipmi_mc_t     *mc,
-			   ipmi_entity_t *ent,
-			   ipmi_sensor_t *sensor,
-			   void          *link);
+/* Set and get the OEM data pointer in the mc. */
+void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
+void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
+
+/* Used by the sensor code to report a new sensor to the MC.  It
+   should return 1 if the sensor code should not add the sensor to
+   its database. */
+int _ipmi_mc_new_sensor(ipmi_mc_t     *mc,
+			ipmi_entity_t *ent,
+			ipmi_sensor_t *sensor,
+			void          *link);
 
 /* This should be called with a new device id for an MC we don't have
    active in the system (it may be inactive). */

@@ -76,20 +76,6 @@ void ipmi_unlock(ipmi_lock_t *lock);
 /* Get a globally unique sequence number. */
 long ipmi_get_seq(void);
 
-/* The sensor code calls the MC code with this when it finds a new
-   sensor.  If this returns 1, the sensor will NOT be added to the
-   list of sensors in then entity.  This will call the OEM code if it
-   has registered for this. */
-int ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
-			    ipmi_entity_t *ent,
-			    ipmi_sensor_t *sensor,
-			    void          *link);
-
-/* This is called by the entity code when a new entity is created.
-   Entity creation cannot be stopped.  This will call the OEM code if
-   it has registered for this. */
-void ipmi_domain_oem_new_entity(ipmi_domain_t *domain, ipmi_entity_t *ent);
-
 /* The event state data structure. */
 struct ipmi_event_state_s
 {

@@ -118,7 +118,10 @@ struct ipmi_mc_s
     void                      *new_sensor_cb_data;
 
     ipmi_oem_event_handler_cb oem_event_handler;
-    void                      *oem_event_handler_cb_data;
+    void                      *oem_event_cb_data;
+
+    ipmi_oem_event_handler_cb sel_oem_event_handler;
+    void                      *sel_oem_event_cb_data;
 
     ipmi_mc_oem_removed_cb removed_mc_handler;
     void                   *removed_mc_cb_data;
@@ -350,7 +353,20 @@ mc_sel_new_event_handler(ipmi_sel_info_t *sel,
 int
 _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event)
 {
-    return 0;
+    if (mc->oem_event_handler)
+	return (mc->oem_event_handler(mc, event, mc->oem_event_cb_data));
+    else
+	return 0;
+}
+
+int
+_ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event)
+{
+    if (mc->sel_oem_event_handler)
+	return (mc->sel_oem_event_handler(mc, event,
+					  mc->sel_oem_event_cb_data));
+    else
+	return 0;
 }
 
 
@@ -496,7 +512,17 @@ ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
 			      void                      *cb_data)
 {
     mc->oem_event_handler = handler;
-    mc->oem_event_handler_cb_data = cb_data;
+    mc->oem_event_cb_data = cb_data;
+    return 0;
+}
+
+int
+ipmi_mc_set_sel_oem_event_handler(ipmi_mc_t                 *mc,
+				  ipmi_oem_event_handler_cb handler,
+				  void                      *cb_data)
+{
+    mc->sel_oem_event_handler = handler;
+    mc->sel_oem_event_cb_data = cb_data;
     return 0;
 }
 
@@ -928,7 +954,10 @@ addr_rsp_handler(ipmi_domain_t *domain,
     ipmi_mc_t                  *mc;
 
     if (rsp_handler) {
-	mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
+	if (domain)
+	    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
+	else
+	    mc = NULL;
 	rsp_handler(mc, msg, rsp_data1);
     }
 }
@@ -1516,10 +1545,10 @@ ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc)
 }
 
 int
-ipmi_mc_oem_new_sensor(ipmi_mc_t     *mc,
-		       ipmi_entity_t *ent,
-		       ipmi_sensor_t *sensor,
-		       void          *link)
+_ipmi_mc_new_sensor(ipmi_mc_t     *mc,
+		    ipmi_entity_t *ent,
+		    ipmi_sensor_t *sensor,
+		    void          *link)
 {
     int rv = 0;
 

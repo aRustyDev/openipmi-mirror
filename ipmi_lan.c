@@ -51,8 +51,9 @@
 
 #ifdef DEBUG_MSG
 static void
-dump_hex(unsigned char *data, int len)
+dump_hex(void *vdata, int len)
 {
+    unsigned char *data = vdata;
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
@@ -77,7 +78,7 @@ dump_hex(unsigned char *data, int len)
 
 /* Number of consecutive failures that must occur before an IP is
    considered failed. */
-#define IP_FAIL_COUNT 3
+#define IP_FAIL_COUNT 6
 
 
 struct ipmi_ll_event_handler_id_s
@@ -720,29 +721,51 @@ rsp_timeout_handler(void              *cb_data,
 	goto out_unlock;
     }
 
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d\n", seq);
+    }
+
     if (! lan->seq_table[seq].inuse)
 	goto out_unlock;
 
-    ip_num = lan->seq_table[seq].last_ip_num;
-    if (lan->ip_working[ip_num]) {
-	if (lan->consecutive_ip_failures[ip_num] == 0) {
-	    /* Set the time when the connection will be considered failed. */
-	    gettimeofday(&(lan->ip_failure_time[ip_num]), NULL);
-	    lan->ip_failure_time[ip_num].tv_sec += IP_FAIL_TIME / 1000000;
-	    lan->ip_failure_time[ip_num].tv_usec += IP_FAIL_TIME % 1000000;
-	    if (lan->ip_failure_time[ip_num].tv_usec > 1000000) {
-		lan->ip_failure_time[ip_num].tv_sec += 1;
-		lan->ip_failure_time[ip_num].tv_usec -= 1000000;
-	    }
-	    lan->consecutive_ip_failures[ip_num] = 1;
-	} else {
-	    lan->consecutive_ip_failures[ip_num]++;
-	    if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
-		struct timeval now;
-		gettimeofday(&now, NULL);
-		if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
-		{
-		    lost_connection(lan, ip_num);
+    if (DEBUG_MSG) {
+	ip_num = lan->seq_table[seq].last_ip_num;
+	ipmi_log(IPMI_LOG_DEBUG,
+		 "Seq #%d\n"
+		 "  addr_type=%d, ip_num=%d, fails=%d\n"
+		 "  fail_start_time=%ld.%6.6ld\n",
+		 seq, lan->seq_table[seq].addr.addr_type,
+		 lan->seq_table[seq].last_ip_num, ip_num,
+		 lan->ip_failure_time[ip_num].tv_sec,
+		 lan->ip_failure_time[ip_num].tv_usec);
+    }
+
+    if (lan->seq_table[seq].addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	/* We only count timeouts on messages to the system interface.
+           Otherwise, if we sent a bunch of messages to the IPMB that
+           timed out, we might trigger this code accidentally. */
+	ip_num = lan->seq_table[seq].last_ip_num;
+	if (lan->ip_working[ip_num]) {
+	    if (lan->consecutive_ip_failures[ip_num] == 0) {
+		/* Set the time when the connection will be considered
+                   failed. */
+		gettimeofday(&(lan->ip_failure_time[ip_num]), NULL);
+		lan->ip_failure_time[ip_num].tv_sec += IP_FAIL_TIME / 1000000;
+		lan->ip_failure_time[ip_num].tv_usec += IP_FAIL_TIME % 1000000;
+		if (lan->ip_failure_time[ip_num].tv_usec > 1000000) {
+		    lan->ip_failure_time[ip_num].tv_sec += 1;
+		    lan->ip_failure_time[ip_num].tv_usec -= 1000000;
+		}
+		lan->consecutive_ip_failures[ip_num] = 1;
+	    } else {
+		lan->consecutive_ip_failures[ip_num]++;
+		if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
+		    struct timeval now;
+		    gettimeofday(&now, NULL);
+		    if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
+		    {
+			lost_connection(lan, ip_num);
+		    }
 		}
 	    }
 	}
@@ -931,6 +954,8 @@ handle_msg_send(lan_timer_info_t      *info,
 	goto out;
     }
 
+    lan->last_seq = seq;
+
     rv = lan_send(lan, addr, addr_len, msg, seq,
 		  &(lan->seq_table[seq].last_ip_num));
     if (rv) {
@@ -1045,7 +1070,7 @@ data_handler(int            fd,
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
 
     /* Make sure the source IP matches what we expect the other end to
@@ -1059,27 +1084,45 @@ data_handler(int            fd,
 	    break;
 	}
     }
-    if (recv_addr >= lan->num_ip_addr)
+    if (recv_addr >= lan->num_ip_addr) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message due to invalid IP");
 	goto out_unlock2;
+    }
 
     /* Validate the length first, so we know that all the data in the
        buffer we will deal with is valid. */
-    if (len < 21) /* Minimum size of an IPMI msg. */
+    if (len < 21) { /* Minimum size of an IPMI msg. */
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message because too small(1)");
 	goto out_unlock2;
+    }
 
     if (data[4] == 0) {
 	/* No authentication. */
-	if (len < (data[13] + 14))
+	if (len < (data[13] + 14)) {
 	    /* Not enough data was supplied, reject the message. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG,
+			 "Dropped message because too small(2)");
 	    goto out_unlock2;
+	}
 	data_len = data[13];
     } else {
-	if (len < 37) /* Minimum size of an authenticated IPMI msg. */
+	if (len < 37) { /* Minimum size of an authenticated IPMI msg. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG,
+			 "Dropped message because too small(3)");
 	    goto out_unlock2;
+	}
 	/* authcode in message, add 16 to the above checks. */
-	if (len < (data[29] + 30))
+	if (len < (data[29] + 30)) {
 	    /* Not enough data was supplied, reject the message. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG,
+			 "Dropped message because too small(4)");
 	    goto out_unlock2;
+	}
 	data_len = data[29];
     }
 
@@ -1087,18 +1130,28 @@ data_handler(int            fd,
     if ((data[0] != 6)
 	|| (data[2] != 0xff)
 	|| (data[3] != 0x07))
+    {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid IPMI/RMCP");
 	goto out_unlock2;
+    }
 
     /* FIXME - need a lock on the session data. */
 
     /* Drop if the authtypes are incompatible. */
-    if (lan->working_authtype != data[4])
+    if (lan->working_authtype != data[4]) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
 	goto out_unlock2;
+    }
 
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
-    if (sess_id != lan->session_id)
+    if (sess_id != lan->session_id) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
 	goto out_unlock2;
+    }
 
     seq = ipmi_get_uint32(data+5);
 
@@ -1107,6 +1160,8 @@ data_handler(int            fd,
            the session seq num so we know the data is valid. */
 	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13);
 	if (rv) {
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
 	    goto out_unlock2;
 	}
 	tmsg = data + 30;
@@ -1130,6 +1185,8 @@ data_handler(int            fd,
 	uint8_t bit = 1 << (lan->inbound_seq_num - seq);
 	if (lan->recv_msg_map & bit) {
 	    /* We've already received the message, so discard it. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    goto out_unlock2;
 	}
 
@@ -1137,6 +1194,8 @@ data_handler(int            fd,
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
 	goto out_unlock2;
     }
 
@@ -1184,9 +1243,12 @@ data_handler(int            fd,
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) &addr;
 
-	if (tmsg[6] != 0)
+	if (tmsg[6] != 0) {
 	    /* An error getting the events, just ignore it. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
 	    goto out_unlock2;
+	}
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si_addr->channel = 0xf;
@@ -1217,8 +1279,11 @@ data_handler(int            fd,
     }
     
     ipmi_lock(lan->seq_num_lock);
-    if (! lan->seq_table[seq].inuse)
+    if (! lan->seq_table[seq].inuse) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message seq not in use");
 	goto out_unlock;
+    }
 
     /* Convert broadcast addresses to regular IPMB addresses, since
        they come back that way. */
@@ -1232,6 +1297,20 @@ data_handler(int            fd,
 	|| (! ipmi_addr_equal(&addr2, lan->seq_table[seq].addr_len,
 			      &addr, addr_len)))
     {
+	if (DEBUG_MSG) {
+	    ipmi_log(IPMI_LOG_DEBUG_START,
+		     "Dropped message netfn/cmd/addr mismatch\n"
+		     "  netfn=%d, exp netfn=%d\n"
+		     "  cmd=%d, exp cmd=%d\n"
+		     "  addr=", 
+		     msg.netfn, lan->seq_table[seq].msg.netfn | 1,
+		     msg.cmd, lan->seq_table[seq].msg.cmd);
+	    dump_hex(&addr, addr_len);
+	    ipmi_log(IPMI_LOG_DEBUG_CONT,
+		     "\n  exp addr=");
+	    dump_hex(&addr2, lan->seq_table[seq].addr_len);
+	    ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	}
 	goto out_unlock;
     }
 

@@ -142,10 +142,10 @@ typedef struct ipmi_domain_con_fail_s ipmi_domain_con_fail_t;
    reason for the failure.  When the connection goes up, the "err"
    value will be zero reporting that the connection is now
    available. */
-int ipmi_domain_add_con_fail_handler(ipmi_domain_t  *domain,
-				     ipmi_domain_cb handler,
-				     void           *cb_data,
-				  ipmi_domain_con_fail_t **id);
+int ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
+				     ipmi_domain_cb         handler,
+				     void                   *cb_data,
+				     ipmi_domain_con_fail_t **id);
 void ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
 					 ipmi_domain_con_fail_t *id);
 
@@ -904,10 +904,14 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
    an OS handler to use for the system. */
 int ipmi_init(os_handler_t *handler);
 
-/* Create a new domain with the given IPMI connection. */
-int ipmi_init_domain(ipmi_con_t     *con,
-		     ipmi_domain_cb handler,
-		     void           *cb_data);
+/* Create a new domain with the given IPMI connection.  The new domain
+   is returned in the new_domain variable, the id for the connection
+   fail handler is return in con_fail_id. */
+int ipmi_init_domain(ipmi_con_t             *con,
+		     ipmi_domain_cb         con_fail_handler,
+		     void                   *con_fail_cb_data,
+		     ipmi_domain_con_fail_t **con_fail_id,
+		     ipmi_domain_id_t       *new_domain);
 
 
 /* This will clean up all the memory associated with IPMI. */

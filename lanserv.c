@@ -57,12 +57,33 @@
 
 #include "lanserv.h"
 
+static int debug = 0;
+
 typedef struct misc_data
 {
     int lan1_fd, lan2_fd;
     int smi_fd;
     char *config_file;
 } misc_data_t;
+
+static int
+dump_hex(void *vdata, int len, int left)
+{
+    unsigned char *data = vdata;
+
+    int i;
+    for (i=0; i<len; i++) {
+	if (left == 0) {
+	    printf("\n  ");
+	    left = 15;
+	} else {
+	    left--;
+	}
+	printf(" %2.2x", data[i]);
+    }
+
+    return left;
+}
 
 static void *
 ialloc(lan_data_t *lan, int size)
@@ -91,6 +112,18 @@ lan_send(lan_data_t *lan,
     struct msghdr msg;
     lan_addr_t    *l = addr;
     int           rv;
+
+    if (debug) {
+	int left, i;
+	printf("Sending message to:\n  ");
+	dump_hex(&l->addr, l->addr_len, 16);
+	printf("\nMsg:\n  ");
+	left = 16;
+	for (i=0; i<vecs; i++) {
+	    left = dump_hex(data[i].iov_base, data[i].iov_len, left);
+	}
+	printf("\n");
+    }
 
     msg.msg_name = &(l->addr);
     msg.msg_namelen = l->addr_len;
@@ -251,6 +284,7 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
     lan_addr_t         l;
     unsigned char      data[256];
 
+    l.addr_len = sizeof(l.addr);
     len = recvfrom(lan_fd, data, sizeof(data), 0, &(l.addr), &(l.addr_len));
     if (len < 0) {
 	if (errno != EINTR) {
@@ -260,6 +294,14 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
 	return;
     }
     l.xmit_fd = lan_fd;
+
+    if (debug) {
+	printf("Got message from:\n  ");
+	dump_hex(&l.addr, l.addr_len, 16);
+	printf("\nMsg:\n  ");
+	dump_hex(data, len, 16);
+	printf("\n");
+    }
 
     if (len < 4)
 	return;
@@ -672,7 +714,6 @@ log(int logtype, msg_t *msg, char *format, ...)
 
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *ipmi_dev = NULL;
-static int debug = 0;
 
 static struct poptOption poptOpts[]=
 {

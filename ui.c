@@ -327,6 +327,9 @@ void
 ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     int do_nl = 1;
+    struct timeval now;
+
+    gettimeofday(&now, NULL);
 
     if (full_screen) {
 	int x = 0, y = 0, old_x = 0, old_y = 0;
@@ -338,22 +341,27 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 	switch(log_type)
 	{
 	    case IPMI_LOG_INFO:
+		wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		wprintw(dummy_pad, "INFO: ");
 		break;
 
 	    case IPMI_LOG_WARNING:
+		wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		wprintw(dummy_pad, "WARN: ");
 		break;
 
 	    case IPMI_LOG_SEVERE:
+		wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		wprintw(dummy_pad, "SEVR: ");
 		break;
 
 	    case IPMI_LOG_FATAL:
+		wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		wprintw(dummy_pad, "FATL: ");
 		break;
 
 	    case IPMI_LOG_ERR_INFO:
+		wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		wprintw(dummy_pad, "EINF: ");
 		break;
 
@@ -361,6 +369,7 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 		do_nl = 0;
 		/* FALLTHROUGH */
 	    case IPMI_LOG_DEBUG:
+		wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		wprintw(dummy_pad, "DEBG: ");
 		break;
 
@@ -396,22 +405,27 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 	switch(log_type)
 	{
 	    case IPMI_LOG_INFO:
+		log_pad_out("%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		log_pad_out("INFO: ");
 		break;
 
 	    case IPMI_LOG_WARNING:
+		log_pad_out("%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		log_pad_out("WARN: ");
 		break;
 
 	    case IPMI_LOG_SEVERE:
+		log_pad_out("%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		log_pad_out("SEVR: ");
 		break;
 
 	    case IPMI_LOG_FATAL:
+		log_pad_out("%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		log_pad_out("FATL: ");
 		break;
 
 	    case IPMI_LOG_ERR_INFO:
+		log_pad_out("%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		log_pad_out("EINF: ");
 		break;
 
@@ -419,6 +433,7 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 		do_nl = 0;
 		/* FALLTHROUGH */
 	    case IPMI_LOG_DEBUG:
+		log_pad_out("%d.%6.6d: ", now.tv_sec, now.tv_usec);
 		log_pad_out("DEBG: ");
 		break;
 
@@ -441,13 +456,17 @@ void
 ui_log(char *format, ...)
 {
     int y = 0, x;
+    struct timeval now;
     va_list ap;
+
+    gettimeofday(&now, NULL);
 
     va_start(ap, format);
 
     if (full_screen) {
 	/* Generate the output to the dummy pad to see how many lines we
 	   will use. */
+	wprintw(dummy_pad, "%d.%6.6d: ", now.tv_sec, now.tv_usec);
 	vw_printw(dummy_pad, format, ap);
 	getyx(dummy_pad, y, x);
 	wmove(dummy_pad, 0, x);
@@ -455,6 +474,7 @@ ui_log(char *format, ...)
 	va_start(ap, format);
     }
 
+    log_pad_out("%ld.%6.6ld: ", now.tv_sec, now.tv_usec);
     vlog_pad_out(format, ap);
     log_pad_refresh(y);
     cmd_win_refresh();
@@ -3562,12 +3582,15 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 {
     int rv;
 
-    if (err)
+    if (err) {
 	ui_log("IPMI connection is down due to error 0x%x\n", err);
-    else if (!initialized)
+	return;
+    } else if (!initialized)
 	ui_log("Completed setup for the IPMI connection\n");
-    else
+    else {
 	ui_log("IPMI connection is back up\n");
+	return;
+    }
 
     initialized = 1;
 

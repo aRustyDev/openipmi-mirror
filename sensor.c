@@ -968,7 +968,7 @@ handle_new_sensor(ipmi_domain_t *domain,
 		     &ent);
 
     if ((! sensor->source_mc)
-	|| (! ipmi_mc_oem_new_sensor(sensor->source_mc, ent, sensor, link)))
+	|| (! _ipmi_mc_new_sensor(sensor->source_mc, ent, sensor, link)))
     {
 	ipmi_entity_add_sensor(ent, sensor, link);
     }
