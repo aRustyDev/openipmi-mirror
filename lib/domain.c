@@ -1353,12 +1353,8 @@ ll_si_rsp_handler(ipmi_con_t   *ipmi,
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
-    if (rv) {
-	if (nmsg->rsp_handler)
-	    nmsg->rsp_handler(NULL, NULL, 0, msg,
-			      nmsg->rsp_data1, nmsg->rsp_data2);
+    if (rv)
 	goto out_unlock;
-    }
 
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = (long) rsp_data4;
@@ -1367,8 +1363,8 @@ ll_si_rsp_handler(ipmi_con_t   *ipmi,
     if (nmsg->rsp_handler)
 	nmsg->rsp_handler(domain, (ipmi_addr_t *) &si, sizeof(si), msg,
 			  nmsg->rsp_data1, nmsg->rsp_data2);
- out_unlock:
     ipmi_mem_free(nmsg);
+ out_unlock:
     ipmi_read_unlock();
 }
 

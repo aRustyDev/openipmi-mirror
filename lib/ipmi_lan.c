@@ -1747,10 +1747,6 @@ lan_send_command(ipmi_con_t            *ipmi,
     rv = handle_msg_send(info, -1, addr, addr_len, msg, rsp_handler,
 			 rsp_data, data2, data3, data4);
     if (rv) {
-	ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
-    }
-
-    if (rv) {
 	if (info->cancelled)
 	    /* The timer couldn't be stopped, so don't let the data be
 	       freed. */
