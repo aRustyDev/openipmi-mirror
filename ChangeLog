@@ -2,6 +2,8 @@
 
 	* lib/fru.c: Fixed an off-by-one problem when writing FRU data.
 
+	* unix/posix_thread_os_hnd.c: ifdef some gdbm stuff that needed it.
+
 2005-03-16 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Added IPMI_REQUEST_DATA_LENGTH_INVALID_CC to the
