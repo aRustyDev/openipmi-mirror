@@ -1,3 +1,7 @@
+2004-03-25 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Move to version 1.2.22.
+
 2004-03-23 Corey Minyard <cminyard@mvista.com> 
 
 	* entity.c: Call _ipmi_find_or_create_mc_by_slave_addr() on new
