@@ -2,6 +2,8 @@
 
 	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
 
+	* lib/ipmi.c: Added raw debug tracing for incoming SNMP traps.
+
 2004-02-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a few problems were callbacks can receive
