@@ -707,7 +707,11 @@ log(int logtype, msg_t *msg, char *format, ...)
 	strcpy(fullformat, timebuf);
 	strcat(fullformat, ": ");
 	strcat(fullformat, format);
-	vsyslog(LOG_NOTICE, fullformat, ap);
+	if (logtype == DEBUG) {
+	    vprintf(fullformat, ap);
+	    printf("\n");
+	} else
+	    vsyslog(LOG_NOTICE, fullformat, ap);
     }
     va_end(ap);
 }

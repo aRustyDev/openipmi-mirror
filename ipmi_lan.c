@@ -722,7 +722,7 @@ rsp_timeout_handler(void              *cb_data,
     }
 
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d\n", seq);
+	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
     }
 
     if (! lan->seq_table[seq].inuse)
@@ -733,7 +733,7 @@ rsp_timeout_handler(void              *cb_data,
 	ipmi_log(IPMI_LOG_DEBUG,
 		 "Seq #%d\n"
 		 "  addr_type=%d, ip_num=%d, fails=%d\n"
-		 "  fail_start_time=%ld.%6.6ld\n",
+		 "  fail_start_time=%ld.%6.6ld",
 		 seq, lan->seq_table[seq].addr.addr_type,
 		 lan->seq_table[seq].last_ip_num, ip_num,
 		 lan->ip_failure_time[ip_num].tv_sec,
@@ -1309,7 +1309,7 @@ data_handler(int            fd,
 	    ipmi_log(IPMI_LOG_DEBUG_CONT,
 		     "\n  exp addr=");
 	    dump_hex(&addr2, lan->seq_table[seq].addr_len);
-	    ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	    ipmi_log(IPMI_LOG_DEBUG_END, "");
 	}
 	goto out_unlock;
     }
