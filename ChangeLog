@@ -6,6 +6,9 @@
 
 	* ui/ui.c: Use OPENIPMI_VERSION for the version string.
 
+	* Makefile.am, configure.in, OpenIPMI.pc.in, OpenIPMIui.pc.in:
+	Added pkg-config info for OpenIPMI libraries.
+
 	* configure.in: Move to version 1.2.21
 
 2004-03-12 Corey Minyard <cminyard@mvista.com> 
