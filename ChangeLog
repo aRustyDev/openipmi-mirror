@@ -3,6 +3,9 @@
 	* lib/entity.c: Ignore sensors for presence if they use the
 	generic reading type codes.
 
+	* lib/chassis.c: Added a dummy presence sensor for the chassis
+	entity so it will be reported as present.
+
 2004-11-09 Corey Minyard <cminyard@mvista.com> 
 
 	* OpenIPMI.spec.in: Clean up the spec file.
