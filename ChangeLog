@@ -1,3 +1,14 @@
+2004-10-22 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_lan.c: Fix problems with connection failure during
+	startup of the connection.  This fixes problems with the
+	connections getting stuck and never coming up.
+
+	* unix/posix_os_hnd.c: Fixed a problem with the return value of
+	getting the random data.
+	* unix/posix_thread_os_hnd.c: ditto
+	* ui/ui_os.c: ditto
+
 2004-10-18 Corey Minyard <cminyard@mvista.com> 
 
 	* oem_intel.c: Move the alarm control to the 0.20 MC, handle

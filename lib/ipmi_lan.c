@@ -2127,6 +2127,18 @@ handle_connected(ipmi_con_t *ipmi, int err)
 
     lan = (lan_data_t *) ipmi->con_data;
 
+    /* Make sure authtypes are reset on an error. */
+    for (i=0; i<lan->num_ip_addr; i++)
+    {
+	if (!lan->ip_working[i]) {
+	    lan->outbound_seq_num[i] = 0;
+	    lan->inbound_seq_num[i] = 0;
+	    lan->session_id[i] = 0;
+	    lan->recv_msg_map[i] = 0;
+	    lan->working_authtype[i] = 0;
+	}
+    }
+
     if (lan->con_change_handler) {
 	if (err) {
 	    /* Report everything that is down. */
@@ -2523,7 +2535,7 @@ static void challenge_done(ipmi_con_t   *ipmi,
     while (lan->inbound_seq_num[addr_num] == 0) {
 	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
 				      &(lan->inbound_seq_num[addr_num]), 4);
-	if (!rv) {
+	if (rv) {
 	    handle_connected(ipmi, rv);
 	    return;
 	}
