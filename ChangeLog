@@ -7,6 +7,8 @@
 	* lib/domain.c: Call the changed handlers when an MC's info or
 	state changes.
 
+	* configure.in: Move to version 1.2.20.
+
 2004-03-11 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.19.
