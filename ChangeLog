@@ -13,6 +13,9 @@
 	* utils/ipmi_mem_alloc.c: Fixed a bug handling the head and
 	tail elements of the debug malloc list.
 
+        * lib/ipmi_lan.c: Fixed a problem where the wrong LUN was being
+        looked at in LAN reponses.
+
 2004-09-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/chassis.c: Fixed a problem where the wrong error was being
