@@ -208,6 +208,10 @@ struct ipmi_entity_s
     int           curr_present;
     int           present_change_count;
 
+    /* Physical slot number info */
+    unsigned int slot_num;
+    int slot_num_present;
+
     /* Hot-swap timing. */
     ent_timer_info_t *hot_swap_act_info;
     ipmi_timeout_t    hot_swap_act_timeout;
@@ -4013,6 +4017,30 @@ ipmi_entity_set_access_address(ipmi_entity_t *ent, int access_address)
     CHECK_ENTITY_LOCK(ent);
 
     ent->info.access_address = access_address;
+}
+
+void
+ipmi_entity_set_physical_slot_num(ipmi_entity_t *ent,
+				  int present,
+				  unsigned int val)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    ent->slot_num = val;
+    ent->slot_num_present = present;
+}
+
+int
+ipmi_entity_get_physical_slot_num(ipmi_entity_t *ent, unsigned int *slot_num)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    if (ent->slot_num_present) {
+        *slot_num = ent->slot_num;
+	return 0;
+    }
+    else
+	return ENOSYS;
 }
 
 int
