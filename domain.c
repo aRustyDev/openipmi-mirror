@@ -1255,7 +1255,9 @@ mc_del_event_done(ipmi_mc_t *mc, int err, void *cb_data)
 {
     del_event_info_t *info = cb_data;
 
-    info->done_handler(info->domain, err, info->cb_data);
+    if (info->done_handler)
+	info->done_handler(info->domain, err, info->cb_data);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -1265,10 +1267,11 @@ del_event_handler(ipmi_mc_t *mc, void *cb_data)
     int              rv;
 
     rv = _ipmi_mc_del_event(mc, info->event, mc_del_event_done, info);
-    if (!rv)
-	rv = info->rv;
-    if (rv)
-	info->done_handler(info->domain, rv, info->cb_data);
+    if (rv) {
+	if (info->done_handler)
+	    info->done_handler(info->domain, rv, info->cb_data);
+	ipmi_mem_free(info);
+    }
 }
 
 int
@@ -1278,20 +1281,25 @@ ipmi_domain_del_event(ipmi_domain_t  *domain,
 		      void           *cb_data)
 {
     int              rv;
-    del_event_info_t info;
+    del_event_info_t *info;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    info.domain = domain;
-    info.event = event;
-    info.done_handler = done_handler;
-    info.cb_data = cb_data;
-    info.rv = 0;
-    rv = _ipmi_mc_pointer_cb(event->mcid, del_event_handler, &info);
-    if (rv)
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->domain = domain;
+    info->event = event;
+    info->done_handler = done_handler;
+    info->cb_data = cb_data;
+    info->rv = 0;
+    rv = _ipmi_mc_pointer_cb(event->mcid, del_event_handler, info);
+    if (rv) {
+	ipmi_mem_free(info);
 	return rv;
-    else
-	return info.rv;
+    }
+    return rv;
 }
 
 typedef struct next_event_handler_info_s
@@ -2070,6 +2078,9 @@ got_dev_id(ipmi_mc_t  *mc,
     domain->major_version = rsp->data[5] & 0xf;
     domain->minor_version = (rsp->data[5] >> 4) & 0xf;
     domain->SDR_repository_support = (rsp->data[6] & 0x02) == 0x02;
+
+    ipmi_mc_set_sdr_repository_support(domain->si_mc,
+				       domain->SDR_repository_support);
 
     if (domain->major_version < 1) {
 	/* We only support 1.0 and greater. */

@@ -335,6 +335,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     void                  *data2, *data3, *data4;
     ipmi_addr_t           *addr;
     unsigned int          addr_len;
+    ipmi_addr_t           tmp_addr;
 
     cmd = (pending_cmd_t *) recv->msgid;
     
@@ -366,8 +367,9 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     if (cmd->use_orig_addr) {
 	/* We did an address translation, make sure the address is the one
 	   that was previously provided. */
-	addr = &cmd->orig_addr;
+	addr = &tmp_addr;
 	addr_len = cmd->orig_addr_len;
+	memcpy(addr, &cmd->orig_addr, addr_len);
     } else {
 	addr = (ipmi_addr_t *) recv->addr;
 	addr_len = recv->addr_len;

@@ -967,7 +967,9 @@ handle_new_sensor(ipmi_domain_t *domain,
 		     sensor->entity_instance,
 		     &ent);
 
-    if (! ipmi_mc_oem_new_sensor(sensor->source_mc, ent, sensor, link)) {
+    if ((! sensor->source_mc)
+	|| (! ipmi_mc_oem_new_sensor(sensor->source_mc, ent, sensor, link)))
+    {
 	ipmi_entity_add_sensor(ent, sensor, link);
     }
 }

@@ -624,6 +624,8 @@ ipmi_init(os_handler_t *handler)
  out_err:
     if (global_lock)
 	handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (seq_lock)
+	handler->destroy_lock(ipmi_os_handler, seq_lock);
     return rv;
 }
 
@@ -634,6 +636,8 @@ ipmi_shutdown(void)
     _ipmi_mc_shutdown();
     if (global_lock)
 	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (seq_lock)
+	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     global_lock = NULL;
 }
 

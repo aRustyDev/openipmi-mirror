@@ -813,7 +813,7 @@ main(int argc, const char *argv[])
 		handle_msg_lan(data.lan1_fd, &lan);
 	    }
 
-	    if (FD_ISSET(data.lan2_fd, &readfds)) {
+	    if ((data.lan2_fd != -1) && (FD_ISSET(data.lan2_fd, &readfds))) {
 		handle_msg_lan(data.lan2_fd, &lan);
 	    }
 	}

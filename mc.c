@@ -250,7 +250,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     /* When we get new logs, handle them. */
     ipmi_sel_set_new_event_handler(mc->sel,
 				   mc_sel_new_event_handler,
-				   mc);
+				   domain);
 
  out_err:
     if (rv)
@@ -806,13 +806,29 @@ typedef struct mc_ptr_info_s
 static void
 mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 {
-    mc_ptr_info_t    *info = cb_data;
-    ipmi_ipmb_addr_t ipmb = { IPMI_IPMB_ADDR_TYPE, info->id.channel,
-			      info->id.mc_num, 0 };
-    ipmi_mc_t        *mc = _ipmi_find_mc_by_addr(domain,
-						 (ipmi_addr_t *) &ipmb,
-						 sizeof(ipmb));
+    mc_ptr_info_t *info = cb_data;
+    ipmi_addr_t   addr;
+    unsigned int  addr_len;
+    ipmi_mc_t     *mc;
 
+    if (info->id.channel == IPMI_BMC_CHANNEL) {
+	ipmi_system_interface_addr_t *si = (void *) &addr;
+
+	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si->channel = info->id.channel;
+	si->lun = 0;
+	addr_len = sizeof(*si);
+    } else {
+	ipmi_ipmb_addr_t *ipmb = (void *) &addr;
+
+	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
+	ipmb->channel = info->id.channel;
+	ipmb->slave_addr = info->id.mc_num;
+	ipmb->lun = 0;
+	addr_len = sizeof(*ipmb);
+    }
+
+    mc = _ipmi_find_mc_by_addr(domain, &addr, addr_len);
     if (mc) {
 	if (info->cmp_seq && (mc->seq != info->id.seq))
 	    return;
