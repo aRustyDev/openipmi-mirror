@@ -2829,8 +2829,8 @@ ipmi_domain_reread_sels(ipmi_domain_t  *domain,
     info->cb_data = cb_data;
     ipmi_lock(info->lock);
     rv = ipmi_domain_iterate_mcs(domain, reread_sels_handler, info);
-    ipmi_unlock(info->lock);
     if (rv) {
+	ipmi_unlock(info->lock);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return rv;
@@ -2839,6 +2839,7 @@ ipmi_domain_reread_sels(ipmi_domain_t  *domain,
 	/* We tried to do an SEL fetch, but failed to actually
 	   accomplish any.  Return an error. */
 	rv = info->err;
+	ipmi_unlock(info->lock);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return rv;
@@ -2846,10 +2847,12 @@ ipmi_domain_reread_sels(ipmi_domain_t  *domain,
 
     if (info->count == 0) {
 	/* No requests, so return an error. */
+	ipmi_unlock(info->lock);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return ENOTSUP;
     }
+    ipmi_unlock(info->lock);
 
     return 0;
 }
