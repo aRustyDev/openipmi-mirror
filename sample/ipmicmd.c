@@ -63,6 +63,7 @@ int ipmi_oem_motorola_mxp_init(void);
 
 static char* sOp		= NULL;
 static int   interactive        = 1;
+static int   interactive_done   = 0;
 
 struct poptOption poptOpts[]=
 {
@@ -124,6 +125,7 @@ void
 posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     vfprintf(stderr, format, ap);
+    fprintf(stderr, "\n");
 }
 
 static void
@@ -319,7 +321,7 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 			       timed_rsp_handler, rspi);
 	data->count--;
 	if (rv) {
-	    printf("Error sending command: %x\n", rv);
+	    fprintf(stderr, "Error sending command: %x\n", rv);
 	    free(data);
 	}
     }
@@ -339,14 +341,14 @@ time_msgs(ipmi_con_t    *con,
 
     data = malloc(sizeof(*data));
     if (!data) {
-	printf("No memory to perform command\n");
+	fprintf(stderr, "No memory to perform command\n");
 	return;
     }
 
     rspi = malloc(sizeof(*rspi));
     if (!rspi) {
 	free(rspi);
-	printf("No memory to perform command\n");
+	fprintf(stderr, "No memory to perform command\n");
 	return;
     }
 
@@ -368,7 +370,7 @@ time_msgs(ipmi_con_t    *con,
 			   timed_rsp_handler, rspi);
     data->count--;
     if (rv) {
-	printf("Error sending command: %x\n", rv);
+	fprintf(stderr, "Error sending command: %x\n", rv);
 	free(data);
     }
 }
@@ -422,13 +424,13 @@ process_input_line(char *buf)
 	unsigned char netfn, cmd;
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
-	    printf("No netfn for regcmd\n");
+	    fprintf(stderr, "No netfn for regcmd\n");
 	    return -1;
 	}
 	netfn = strtoul(v, &endptr, 16);
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
-	    printf("No cmd for regcmd\n");
+	    fprintf(stderr, "No cmd for regcmd\n");
 	    return -1;
 	}
 	cmd = strtoul(v, &endptr, 16);
@@ -446,20 +448,20 @@ process_input_line(char *buf)
 	unsigned char netfn, cmd;
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
-	    printf("No netfn for regcmd\n");
+	    fprintf(stderr, "No netfn for regcmd\n");
 	    return -1;
 	}
 	netfn = strtoul(v, &endptr, 16);
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
-	    printf("No cmd for regcmd\n");
+	    fprintf(stderr, "No cmd for regcmd\n");
 	    return -1;
 	}
 	cmd = strtoul(v, &endptr, 16);
 	
 	rv = con->deregister_for_command(con, netfn, cmd);
 	if (rv) {
-	    printf("Could not set to get receive command: %x", rv);
+	    fprintf(stderr, "Could not set to get receive command: %x", rv);
 	    return -1;
 	}
 	return 0;
@@ -468,7 +470,7 @@ process_input_line(char *buf)
     if (strcmp(v, "test_lat") == 0) {
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
-	    printf("No count for test_lat\n");
+	    fprintf(stderr, "No count for test_lat\n");
 	    return -1;
 	}
 	time_count = strtoul(v, &endptr, 16);
@@ -486,13 +488,13 @@ process_input_line(char *buf)
 
     while (v != NULL) {
 	if (pos >= sizeof(outbuf)) {
-	    printf("Message too long");
+	    fprintf(stderr, "Message too long");
 	    return -1;
 	}
 
 	outbuf[pos] = strtoul(v, &endptr, 16);
 	if (*endptr != '\0') {
-	    printf("Value %d was invalid\n", pos+1);
+	    fprintf(stderr, "Value %d was invalid\n", pos+1);
 	    return -1;
 	}
 	pos++;
@@ -500,7 +502,7 @@ process_input_line(char *buf)
     }
 
     if (pos <= 0) {
-	printf("No channel specified\n");
+	fprintf(stderr, "No channel specified\n");
 	return -1;
     }
 
@@ -510,7 +512,7 @@ process_input_line(char *buf)
     if (channel == IPMI_BMC_CHANNEL) {
 	struct ipmi_system_interface_addr *si = (void *) &addr;
 	if ((pos-start) < 1) {
-	    printf("No IPMB address specified\n");
+	    fprintf(stderr, "No LUN specified\n");
 	    return -1;
 	}
 	si->lun = outbuf[start]; start++;
@@ -522,7 +524,7 @@ process_input_line(char *buf)
 	struct ipmi_lan_addr *lan = (void *) &addr;
 
 	if ((pos-start) < 3) {
-	    printf("No LAN address specified\n");
+	    fprintf(stderr, "No LAN address specified\n");
 	    return -1;
 	}
 
@@ -538,7 +540,7 @@ process_input_line(char *buf)
 	struct ipmi_ipmb_addr *ipmb = (void *) &addr;
 
 	if ((pos-start) < 2) {
-	    printf("No IPMB address specified\n");
+	    fprintf(stderr, "No IPMB address specified\n");
 	    return -1;
 	}
 
@@ -557,7 +559,7 @@ process_input_line(char *buf)
 
     if (msg.netfn & 1) {
 	if ((pos-start) < 1) {
-	    printf("No sequence for response\n");
+	    fprintf(stderr, "No sequence for response\n");
 	    return -1;
 	}
 
@@ -565,7 +567,7 @@ process_input_line(char *buf)
     }
 
     if ((pos-start) < 1) {
-	printf("Message too short\n");
+	fprintf(stderr, "Message too short\n");
 	return -1;
     }
 
@@ -582,7 +584,7 @@ process_input_line(char *buf)
 	    rv = con->send_command(con, &addr, addr_len, &msg,
 				   rsp_handler, NULL);
 	if (rv) {
-	    printf("Error sending command: %x\n", rv);
+	    fprintf(stderr, "Error sending command: %x\n", rv);
 	}
     }
 
@@ -627,7 +629,7 @@ user_input_ready(int fd, void *data)
     }
 
     if (pos >= 255) {
-	printf("Input line too long\n");
+	fprintf(stderr, "Input line too long\n");
 	pos = 0;
 	if (interactive)
 	    printf("=> ");
@@ -649,7 +651,10 @@ con_changed_handler(ipmi_con_t   *ipmi,
 	    fprintf(stderr, "Unable to setup connection: %x\n", err);
 	    leave(1);
 	}
-	process_input_line(buf);
+	if (!interactive_done) {
+	    interactive_done = 1;
+	    process_input_line(buf);
+	}
     } else {
 	if (err)
 	    fprintf(stderr, "Connection failed to port %d: %x\n", port_num,
@@ -715,7 +720,7 @@ main(int argc, char *argv[])
     /* OS handler allocated first. */
     os_hnd = ipmi_posix_get_os_handler();
     if (!os_hnd) {
-	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+	fprintf(stderr, "ipmi_smi_setup_con: Unable to allocate os handler\n");
 	exit(1);
     }
 
