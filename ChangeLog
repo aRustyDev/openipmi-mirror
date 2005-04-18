@@ -4,7 +4,7 @@
 	cause the SEL fetch to not work any more on systems that support
 	individual deletes.
 
-	* lib/configure.in: Move to version 1.4.14.
+	* lib/configure.in: Move to version 1.4.15.
 
 2005-04-08 Corey Minyard <cminyard@mvista.com> 
 
