@@ -1,8 +1,16 @@
+2005-04-18 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sel.c: Fix a bug where deleting the last record of the SEL
+	cause the SEL fetch to not work any more on systems that support
+	individual deletes.
+
+	* lib/configure.in: Move to version 1.4.14.
+
 2005-04-08 Corey Minyard <cminyard@mvista.com> 
 
 	* sample/ipmicmd.c: Make sure all error output goes to stderr and
 	only submit the command once in LAN mode.
-	
+
 2005-03-23 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmdlang.c: Cast ipmi_time_t to long long when outputting
