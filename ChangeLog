@@ -1,3 +1,7 @@
+2005-05-10 Marcus Meissner
+
+	* ui/ui.c: Fixed a potential 2-byte overflow.
+
 2005-03-23 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/mxp.h: Fixed the license to be LGPL, as

@@ -4099,7 +4099,7 @@ clearpeflock_cmd(char *cmd, char **toks, void *cb_data)
 
     mc_toks = strtok_r(NULL, "", toks);
     if (mc_toks) {
-	strncpy(buf+2, mc_toks, sizeof(buf));
+	strncpy(buf+2, mc_toks, sizeof(buf)-2);
 	buf[0] = 'a';
 	buf[1] = ' ';
 	strtok_r(buf, " ", &ntoks);
@@ -4706,7 +4706,7 @@ clearlanparmlock_cmd(char *cmd, char **toks, void *cb_data)
 
     mc_toks = strtok_r(NULL, "", toks);
     if (mc_toks) {
-	strncpy(buf+2, mc_toks, sizeof(buf));
+	strncpy(buf+2, mc_toks, sizeof(buf)-2);
 	buf[0] = 'a';
 	buf[1] = ' ';
 	strtok_r(buf, " ", &ntoks);
