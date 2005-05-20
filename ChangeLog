@@ -1,4 +1,9 @@
+2005-05-19 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 1.4.16.
+
 2005-05-19 Forrest Zhao <forrest.zhao@intel.com>
+
 	* include/OpenIPMI/ipmiif.h,lib/domain.c, lib/oem_atca.c,
 	  lib/sensor.c: Add callback for OEM-specific sensor types.
 
