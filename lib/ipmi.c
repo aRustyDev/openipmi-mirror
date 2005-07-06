@@ -885,6 +885,8 @@ int _ipmi_smi_init(os_handler_t *os_hnd);
 int _ipmi_lan_init(os_handler_t *os_hnd);
 int _ipmi_mxp_init(os_handler_t *os_hnd);
 int ipmi_malloc_init(os_handler_t *os_hnd);
+int _ipmi_fru_init(void);
+void _ipmi_fru_shutdown(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
@@ -933,6 +935,10 @@ ipmi_init(os_handler_t *handler)
     _ipmi_domain_init();
     _ipmi_mc_init();
 
+    rv = _ipmi_fru_init();
+    if (rv)
+	goto out_err;
+
     /* Call the OEM handlers. */
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
@@ -950,6 +956,7 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_intel_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
+    _ipmi_fru_shutdown();
     if (seq_lock)
 	handler->destroy_lock(ipmi_os_handler, seq_lock);
     ipmi_os_handler = NULL;
@@ -968,6 +975,7 @@ ipmi_shutdown(void)
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
     _ipmi_conn_shutdown();
+    _ipmi_fru_shutdown();
     if (seq_lock)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
 }
