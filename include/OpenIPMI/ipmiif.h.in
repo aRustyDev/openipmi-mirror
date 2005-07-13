@@ -1101,8 +1101,10 @@ int ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			       ipmi_sensor_done_cb done,
 			       void                *cb_data);
 
-/* Get the LUN and sensor number for the sensor, as viewed from its
-   management controller. */
+/* Get the sensor's Owner ID, and the LUN and sensor number for the sensor,
+   as viewed from its management controller.  These are really kind of
+   internal but are required for CIM mappings. */
+int ipmi_sensor_get_owner(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 			int           *lun,
 			int           *num);
