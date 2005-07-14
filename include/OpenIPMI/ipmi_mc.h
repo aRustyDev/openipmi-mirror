@@ -129,7 +129,7 @@ typedef void (*ipmi_mc_response_handler_t)(ipmi_mc_t  *src,
 					   void       *rsp_data);
 int ipmi_mc_send_command(ipmi_mc_t                  *mc,
 			 unsigned int               lun,
-			 ipmi_msg_t                 *cmd,
+			 const ipmi_msg_t           *cmd,
 			 ipmi_mc_response_handler_t rsp_handler,
 			 void                       *rsp_data);
 

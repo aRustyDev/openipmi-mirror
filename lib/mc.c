@@ -2102,7 +2102,7 @@ addr_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 int
 ipmi_mc_send_command(ipmi_mc_t                  *mc,
 		     unsigned int               lun,
-		     ipmi_msg_t                 *msg,
+		     const ipmi_msg_t           *msg,
 		     ipmi_mc_response_handler_t rsp_handler,
 		     void                       *rsp_data)
 {

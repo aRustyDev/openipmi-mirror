@@ -199,9 +199,9 @@ struct ipmi_con_s
        reponse handler is called, even if it fails or the message is
        dropped. */
     int (*send_command)(ipmi_con_t            *ipmi,
-			ipmi_addr_t           *addr,
+			const ipmi_addr_t     *addr,
 			unsigned int          addr_len,
-			ipmi_msg_t            *msg,
+			const ipmi_msg_t      *msg,
 			ipmi_ll_rsp_handler_t rsp_handler,
 			ipmi_msgi_t           *rspi);
 
@@ -220,11 +220,11 @@ struct ipmi_con_s
     /* Send a response message.  This is not supported on all
        interfaces, primarily only on system management interfaces.  If
        not supported, this should return ENOSYS. */
-    int (*send_response)(ipmi_con_t   *ipmi,
-			 ipmi_addr_t  *addr,
-			 unsigned int addr_len,
-			 ipmi_msg_t   *msg,
-			 long         sequence);
+    int (*send_response)(ipmi_con_t        *ipmi,
+			 const ipmi_addr_t *addr,
+			 unsigned int      addr_len,
+			 const ipmi_msg_t  *msg,
+			 long              sequence);
 
     /* Register to receive incoming commands.  This is not supported
        on all interfaces, primarily only on system management

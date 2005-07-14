@@ -1754,7 +1754,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 }
 
 static int
-matching_domain_sysaddr(ipmi_domain_t *domain, ipmi_addr_t *addr,
+matching_domain_sysaddr(ipmi_domain_t *domain, const ipmi_addr_t *addr,
 			ipmi_system_interface_addr_t *si)
 {
     if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
@@ -1783,9 +1783,9 @@ matching_domain_sysaddr(ipmi_domain_t *domain, ipmi_addr_t *addr,
 
 int
 ipmi_send_command_addr(ipmi_domain_t                *domain,
-		       ipmi_addr_t		    *addr,
+		       const ipmi_addr_t	    *addr,
 		       unsigned int                 addr_len,
-		       ipmi_msg_t                   *msg,
+		       const ipmi_msg_t             *msg,
 		       ipmi_addr_response_handler_t rsp_handler,
 		       void                         *rsp_data1,
 		       void                         *rsp_data2)

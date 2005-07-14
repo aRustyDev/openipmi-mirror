@@ -496,11 +496,11 @@ auth_check(lan_data_t    *lan,
 	 
 #define IPMI_MAX_LAN_LEN (IPMI_MAX_MSG_LENGTH + 42)
 static int
-lan_send_addr(lan_data_t  *lan,
-	      int         lun,
-	      int         seq,
-	      ipmi_msg_t  *msg,
-	      int         addr_num)
+lan_send_addr(lan_data_t       *lan,
+	      int              lun,
+	      int              seq,
+	      const ipmi_msg_t *msg,
+	      int              addr_num)
 {
     unsigned char data[IPMI_MAX_LAN_LEN];
     unsigned char *tmsg;
@@ -573,11 +573,11 @@ lan_send_addr(lan_data_t  *lan,
 }
 
 static int
-lan_send(lan_data_t  *lan,
-	 int         lun,
-	 int         seq,
-	 ipmi_msg_t  *msg,
-	 int         *ip_num)
+lan_send(lan_data_t       *lan,
+	 int              lun,
+	 int              seq,
+	 const ipmi_msg_t *msg,
+	 int              *ip_num)
 {
     if (lan->connected) {
 	lan->num_sends++;
@@ -1882,9 +1882,9 @@ data_handler(int            fd,
 static int
 handle_msg_send(lan_timer_info_t      *info,
 		int                   addr_num,
-		ipmi_addr_t           *addr,
+		const ipmi_addr_t     *addr,
 		unsigned int          addr_len,
-		ipmi_msg_t            *msg,
+		const ipmi_msg_t      *msg,
 		ipmi_ll_rsp_handler_t rsp_handler,
 		ipmi_msgi_t           *rspi)
 {
@@ -1971,9 +1971,9 @@ handle_msg_send(lan_timer_info_t      *info,
 static int
 lan_send_command_forceip(ipmi_con_t            *ipmi,
 			 int                   addr_num,
-			 ipmi_addr_t           *addr,
+			 const ipmi_addr_t     *addr,
 			 unsigned int          addr_len,
-			 ipmi_msg_t            *msg,
+			 const ipmi_msg_t      *msg,
 			 ipmi_ll_rsp_handler_t rsp_handler,
 			 ipmi_msgi_t           *rspi)
 {
@@ -2027,9 +2027,9 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
 
 static int
 lan_send_command(ipmi_con_t            *ipmi,
-		 ipmi_addr_t           *addr,
+		 const ipmi_addr_t     *addr,
 		 unsigned int          addr_len,
-		 ipmi_msg_t            *msg,
+		 const ipmi_msg_t      *msg,
 		 ipmi_ll_rsp_handler_t rsp_handler,
 		 ipmi_msgi_t           *rspi)
 {
@@ -2238,11 +2238,11 @@ lan_deregister_for_events(ipmi_con_t                 *ipmi,
 }
 
 static int
-lan_send_response(ipmi_con_t   *ipmi,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *msg,
-		  long         sequence)
+lan_send_response(ipmi_con_t        *ipmi,
+		  const ipmi_addr_t *addr,
+		  unsigned int      addr_len,
+		  const ipmi_msg_t  *msg,
+		  long              sequence)
 {
     return ENOSYS;
 }

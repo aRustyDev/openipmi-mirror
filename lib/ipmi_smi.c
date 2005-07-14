@@ -285,12 +285,12 @@ smi_put(ipmi_con_t *ipmi)
 
 /* Must be called with cmd_lock held. */
 static void
-add_cmd(ipmi_con_t    *ipmi,
-	ipmi_addr_t   *addr,
-	unsigned int  addr_len,
-	ipmi_msg_t    *msg,
-	smi_data_t    *smi,
-	pending_cmd_t *cmd)
+add_cmd(ipmi_con_t        *ipmi,
+	const ipmi_addr_t *addr,
+	unsigned int      addr_len,
+	const ipmi_msg_t  *msg,
+	smi_data_t        *smi,
+	pending_cmd_t     *cmd)
 {
     cmd->ipmi = ipmi;
     memcpy(&(cmd->addr), addr, addr_len);
@@ -458,12 +458,12 @@ open_smi_fd(int if_num, int *using_socket)
 }
 
 static int
-smi_send(smi_data_t   *smi,
-	 int          fd,
-	 ipmi_addr_t  *addr,
-	 unsigned int addr_len,
-	 ipmi_msg_t   *msg,
-	 long         msgid)
+smi_send(smi_data_t        *smi,
+	 int               fd,
+	 const ipmi_addr_t *addr,
+	 unsigned int      addr_len,
+	 const ipmi_msg_t  *msg,
+	 long              msgid)
 {
     int rv;
     ipmi_addr_t myaddr;
@@ -939,9 +939,9 @@ ipmi_sock_data_handler(int            fd,
 
 static int
 smi_send_command(ipmi_con_t            *ipmi,
-		 ipmi_addr_t           *addr,
+		 const ipmi_addr_t     *addr,
 		 unsigned int          addr_len,
-		 ipmi_msg_t            *msg,
+		 const ipmi_msg_t      *msg,
 		 ipmi_ll_rsp_handler_t rsp_handler,
 		 ipmi_msgi_t           *trspi)
 {
@@ -1114,11 +1114,11 @@ smi_deregister_for_events(ipmi_con_t                 *ipmi,
 }
 
 static int
-smi_send_response(ipmi_con_t   *ipmi,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *msg,
-		  long         sequence)
+smi_send_response(ipmi_con_t        *ipmi,
+		  const ipmi_addr_t *addr,
+		  unsigned int      addr_len,
+		  const ipmi_msg_t  *msg,
+		  long              sequence)
 {
     smi_data_t *smi;
     int        rv;

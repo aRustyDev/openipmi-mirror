@@ -91,10 +91,10 @@ int ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
 /* IPMI data handling. */
 
 /* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint32(unsigned char *data);
+unsigned int ipmi_get_uint32(const unsigned char *data);
 
 /* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint16(unsigned char *data);
+unsigned int ipmi_get_uint16(const unsigned char *data);
 
 /* Add a 32-bit integer to the data, IPMI (little-endian) style. */
 void ipmi_set_uint32(unsigned char *data, int val);
