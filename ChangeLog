@@ -1,3 +1,8 @@
+2005-08-05 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Fix an entity destruction problem that could
+	result in a SEGV in some situations.
+
 2005-07-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Make sure the entity for a sensor is locked even
