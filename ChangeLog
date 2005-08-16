@@ -1,3 +1,9 @@
+2005-08-16 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Add swig version detection.
+	
+	* configure.in: Move to version 1.4.19
+
 2005-08-05 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fix an entity destruction problem that could
