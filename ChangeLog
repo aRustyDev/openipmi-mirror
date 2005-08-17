@@ -1,5 +1,14 @@
 2005-08-16 Corey Minyard <cminyard@mvista.com>
 
+	* OpenIPMI.pc.in: Fix linking and order for libOpenIPMIutils.
+	* OpenIPMIcmdlang.pc.in: ditto
+	* OpenIPMIglib.pc.in: ditto
+	* OpenIPMIposix.pc.in: ditto
+	* OpenIPMIpthread.pc.in: ditto
+	* OpenIPMIui.pc.in: ditto
+
+2005-08-16 Corey Minyard <cminyard@mvista.com>
+
 	* configure.in: Add swig version detection.
 	
 	* configure.in: Move to version 1.4.19
