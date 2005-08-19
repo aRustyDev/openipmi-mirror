@@ -1,3 +1,10 @@
+2005-08-18 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: When a hot-swap event comes in and the MC
+	already exists, it is probably an AMC insertion/removal.
+	Rescan the SDRs on the IPMC when this occurs, as it probably has
+	new sensors.
+
 2005-08-16 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.pc.in: Fix linking and order for libOpenIPMIutils.
@@ -70,11 +77,11 @@
 	a user problem.
 
 2005-06-14 Forrest Zhao <forrest.zhao@intel.com>, Corey Minyard <cminyard@mvista.com>
-        * include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_oem.h 
-          lib/fru.c, lib/oem_atca.c, ui/ui.c: Add support for OEM FRU
-          multirecord decode, providing a hierarchy interface for user to
-          get each field of decoded OEM FRU multirecord.
- 
+	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_oem.h 
+	  lib/fru.c, lib/oem_atca.c, ui/ui.c: Add support for OEM FRU
+	  multirecord decode, providing a hierarchy interface for user to
+	  get each field of decoded OEM FRU multirecord.
+
 2005-06-10 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.4.17.
