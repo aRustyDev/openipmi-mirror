@@ -612,6 +612,8 @@ control_rsp_handler(ipmi_mc_t  *mc,
 				 control_rsp_handler2,
 				 info);
     if (rv) {
+	int nrv;
+
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%scontrol.c(control_rsp_handler): "
 		 "Could not convert control id to a pointer",
@@ -620,8 +622,8 @@ control_rsp_handler(ipmi_mc_t  *mc,
 	control->usecount++;
 	_ipmi_domain_entity_unlock(control->domain);
 
-	rv = _ipmi_entity_get(control->entity);
-	if (! rv)
+	nrv = _ipmi_entity_get(control->entity);
+	if (! nrv)
 	    entity = control->entity;
 
 	if (info->__rsp_handler)
