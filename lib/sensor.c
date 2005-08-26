@@ -605,7 +605,6 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
     ipmi_entity_t         *entity = NULL;
 
     if (sensor->destroyed) {
-
 	_ipmi_domain_entity_lock(sensor->domain);
 	sensor->usecount++;
 	_ipmi_domain_entity_unlock(sensor->domain);
@@ -624,6 +623,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (!mc) {
+	_ipmi_domain_entity_lock(sensor->domain);
+	sensor->usecount++;
+	_ipmi_domain_entity_unlock(sensor->domain);
+
 	rv = _ipmi_entity_get(sensor->entity);
 	if (! rv)
 	    entity = sensor->entity;
@@ -631,6 +634,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, ECANCELED, rsp, info->__cb_data);
 
+	_ipmi_sensor_put(sensor);
 	if (entity)
 	    _ipmi_entity_put(entity);
 	return;
@@ -649,6 +653,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 		 " Could not convert sensor id to a pointer",
 		 MC_NAME(mc));
 
+	_ipmi_domain_entity_lock(sensor->domain);
+	sensor->usecount++;
+	_ipmi_domain_entity_unlock(sensor->domain);
+
 	nrv = _ipmi_entity_get(sensor->entity);
 	if (! nrv)
 	    entity = sensor->entity;
@@ -656,6 +664,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
 
+	_ipmi_sensor_put(sensor);
 	if (entity)
 	    _ipmi_entity_put(entity);
     }
@@ -3721,8 +3730,7 @@ check_events_capability(ipmi_sensor_t      *sensor,
     }
 
     if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
-	uint16_t mask1 = sensor->mask1;
-	uint16_t mask2 = sensor->mask2;
+	uint16_t mask1, mask2;
 
 	ipmi_sensor_get_event_masks(sensor, &mask1, &mask2);
 	if (((~mask1) & states->__assertion_events)

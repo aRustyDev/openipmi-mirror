@@ -525,7 +525,7 @@ ipmi_control_opq_done(ipmi_control_t *control)
     if (!control)
 	return;
 
-     /* This gets called on ECANCELLED error cases, if the control is
+     /* This gets called on ECANCELED error cases, if the control is
 	already we need to clear out the opq. */
     if (control->destroyed) {
 	if (control->waitq) {
@@ -557,6 +557,7 @@ control_rsp_handler(ipmi_mc_t  *mc,
     ipmi_control_op_info_t *info = rsp_data;
     int                    rv;
     ipmi_control_t         *control = info->__control;
+    ipmi_entity_t          *entity = NULL;
 
     if (control->destroyed) {
 	ipmi_entity_t *entity = NULL;
@@ -586,8 +587,22 @@ control_rsp_handler(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "control.c(control_rsp_handler): "
 		 "MC was destroyed while a control operation was in progress");
+
+	_ipmi_domain_entity_lock(control->domain);
+	control->usecount++;
+	_ipmi_domain_entity_unlock(control->domain);
+
+	rv = _ipmi_entity_get(control->entity);
+	if (! rv)
+	    entity = control->entity;
+
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
+
+	_ipmi_control_put(control);
+	if (entity)
+	    _ipmi_entity_put(entity);
+
 	return;
     }
 
@@ -601,8 +616,20 @@ control_rsp_handler(ipmi_mc_t  *mc,
 		 "%scontrol.c(control_rsp_handler): "
 		 "Could not convert control id to a pointer",
 		 MC_NAME(mc));
+	_ipmi_domain_entity_lock(control->domain);
+	control->usecount++;
+	_ipmi_domain_entity_unlock(control->domain);
+
+	rv = _ipmi_entity_get(control->entity);
+	if (! rv)
+	    entity = control->entity;
+
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
+
+	_ipmi_control_put(control);
+	if (entity)
+	    _ipmi_entity_put(entity);
     }
 }
 			 
