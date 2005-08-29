@@ -4066,32 +4066,6 @@ ipmi_fru_set_int_val(ipmi_fru_t *fru,
 }
 
 int
-ipmi_fru_set_float_val(ipmi_fru_t *fru,
-		       int        index,
-		       int        num,
-		       double     val)
-{
-    fru_data_rep_t *p;
-    int            rv;
-
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
-	return EINVAL;
-
-    p = frul + index;
-
-    if (p->type != IPMI_FRU_DATA_FLOAT)
-	return EINVAL;
-
-    if (! p->hasnum) {
-	rv = p->u.floattype.set(fru, val);
-    } else {
-	rv = p->u.floatnumtype.set(fru, num, val);
-    }
-
-    return rv;
-}
-
-int
 ipmi_fru_set_time_val(ipmi_fru_t *fru,
 		      int        index,
 		      int        num,
