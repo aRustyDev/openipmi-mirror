@@ -283,9 +283,9 @@ _ipmi_event_get_generating_mc(ipmi_domain_t *domain,
 }
 
 ipmi_sensor_id_t
-ipmi_event_get_sensor_id(ipmi_domain_t *domain,
-			 ipmi_mc_t     *sel_mc,
-			 ipmi_event_t  *event)
+ipmi_event_get_generating_sensor_id(ipmi_domain_t *domain,
+			            ipmi_mc_t     *sel_mc,
+			            ipmi_event_t  *event)
 {
     ipmi_sensor_id_t id;
     ipmi_mc_t        *mc;
