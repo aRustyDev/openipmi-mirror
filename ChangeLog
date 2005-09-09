@@ -1,3 +1,7 @@
+2005-09-08 Matt Domsch <Matt_Domsch@dell.com>
+
+	* ipmi.init: silence modprobe output, matches Fedora again
+	
 2005-08-31 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.in, lib/entity.c: Added a function to
