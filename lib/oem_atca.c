@@ -2832,6 +2832,13 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	goto out;
     }
 
+    /* Make sure the shelf entity is reported first. */
+    if (info->shelf_entity) {
+	_ipmi_entity_add_ref(info->shelf_entity);
+	_ipmi_entity_put(info->shelf_entity);
+	_ipmi_entity_get(info->shelf_entity);
+    }
+
     info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
     if (!info->ipmcs) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -2849,7 +2856,6 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	char        *name;
 	int         entity_id;
 
-printf("Handling address %d\n", info->addresses[i].hw_address);
 	b->shelf = info;
 	b->idx = i;
 	b->ipmb_address = info->addresses[i].hw_address * 2;
@@ -2953,11 +2959,8 @@ printf("Handling address %d\n", info->addresses[i].hw_address);
     info->setup = 1;
 
  out:
-    if (info->shelf_entity) {
-	_ipmi_entity_add_ref(info->shelf_entity);
+    if (info->shelf_entity)
 	_ipmi_entity_put(info->shelf_entity);
-    }
-    return;
 }
 
 static int
@@ -3190,7 +3193,6 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
         if (has_ipmb_32)
                 info->num_addresses--;
         else {
-printf("Adding address 32\n");
 	    /* If we don't find the "main" address, add it. */
             info->addresses[j].hw_address = 32 >> 1;
             info->addresses[j].site_num = 0;

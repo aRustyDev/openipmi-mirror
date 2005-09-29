@@ -1,3 +1,8 @@
+2005-09-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: Make sure the shelf entity is reported
+	before any child entities of the ATCA shelf.
+
 2005-09-21 Matt Domsch <Matt_Domsch@dell.com>
 
 	* lib/event.c, include/OpenIPMI/ipmiif.h.in: Added a way to
