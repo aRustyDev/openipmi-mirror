@@ -2832,6 +2832,18 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	goto out;
     }
 
+    /* Set up shelf FRU data for the shelf entity, and pass our shelf
+       fru onto the entity. */
+    ipmi_entity_set_is_logical_fru(info->shelf_entity, 1);
+    ipmi_entity_set_access_address(info->shelf_entity, info->shelf_fru_ipmb);
+    ipmi_entity_set_fru_device_id(info->shelf_entity,
+				  info->shelf_fru_device_id);
+    ipmi_entity_set_lun(info->shelf_entity, 0);
+    ipmi_entity_set_private_bus_id(info->shelf_entity, 0);
+    ipmi_entity_set_channel(info->shelf_entity, 0);
+    ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
+    info->shelf_fru = NULL;
+
     /* Make sure the shelf entity is reported first. */
     if (info->shelf_entity) {
 	_ipmi_entity_add_ref(info->shelf_entity);
@@ -2993,17 +3005,18 @@ alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto out_err;
     }
 
-    info->shelf_fru_ipmb = msg->data[3];
-    info->shelf_fru_device_id = msg->data[5];
+    if (!info->shelf_address_only_on_bmc)
+	info->shelf_fru_ipmb = msg->data[3];
+    info->shelf_fru_device_id = 1; /* Always at FRU ID 1 */
 
     rv = ipmi_fru_alloc_notrack(domain,
 				1,
 				info->shelf_fru_ipmb,
-				1,
+				info->shelf_fru_device_id,
 				0,
 				0,
 				0,
-				IPMI_FRU_FTR_MULTI_RECORD_AREA_MASK,
+				IPMI_FRU_ALL_AREA_MASK,
 				shelf_fru_fetched,
 				info,
 				&info->shelf_fru);
@@ -3435,9 +3448,6 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
        onto shelf FRUs. */
     info->curr_shelf_fru = 0;
 
-    if (info->shelf_address_only_on_bmc)
-	info->shelf_fru_ipmb = 0x20;
-
     rv = ipmi_domain_add_event_handler(domain, atca_event_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -3449,6 +3459,8 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     }
 
     /* Per ECN, FRU data is on a shelf manager FRU id 254 */
+    info->shelf_fru_ipmb = 0x20;
+    info->shelf_fru_device_id = 254;
     rv = ipmi_fru_alloc_notrack(domain,
 				1,
 				0x20,
@@ -3456,7 +3468,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 				0,
 				0,
 				0,
-				IPMI_FRU_FTR_MULTI_RECORD_AREA_MASK,
+				IPMI_FRU_ALL_AREA_MASK,
 				shelf_fru_fetched,
 				info,
 				&info->shelf_fru);

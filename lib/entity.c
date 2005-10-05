@@ -745,6 +745,7 @@ void
 _ipmi_entity_put(ipmi_entity_t *ent)
 {
     ipmi_domain_t *domain = ent->domain;
+    int           entity_fru_fetch = 0;
     _ipmi_domain_entity_lock(domain);
  retry:
     if (ent->usecount == 1) {
@@ -753,7 +754,7 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	    ent->info = ent->pending_info;
             /* If the entity became a fru and is present, get its fru info. */
             if (!was_fru && ipmi_entity_get_is_fru(ent) && ent->present)
-                ipmi_entity_fetch_frus(ent);
+		entity_fru_fetch = 1;
 	    entity_set_name(ent);
 	    ent->pending_info_ready = 0;
 	}
@@ -814,6 +815,10 @@ _ipmi_entity_put(ipmi_entity_t *ent)
  out:
     ent->usecount--;
  out2:
+    /* Wait till here to start fetching FRUs, as we want to report the
+       entity first before we start the fetch. */
+    if (entity_fru_fetch)
+	ipmi_entity_fetch_frus(ent);
     _ipmi_domain_entity_unlock(domain);
 }
 
@@ -5057,6 +5062,16 @@ ipmi_entity_get_fru(ipmi_entity_t *ent)
     CHECK_ENTITY_LOCK(ent);
 
     return ent->fru;
+}
+
+void
+ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    if (ent->fru)
+	ipmi_fru_destroy_internal(ent->fru, NULL, NULL);
+    ent->fru = fru;
 }
 
 /***************************************************************************
