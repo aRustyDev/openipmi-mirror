@@ -2841,7 +2841,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
     ipmi_entity_set_lun(info->shelf_entity, 0);
     ipmi_entity_set_private_bus_id(info->shelf_entity, 0);
     ipmi_entity_set_channel(info->shelf_entity, 0);
-    ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
+    _ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
     info->shelf_fru = NULL;
 
     /* Make sure the shelf entity is reported first. */
@@ -2849,6 +2849,9 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	_ipmi_entity_add_ref(info->shelf_entity);
 	_ipmi_entity_put(info->shelf_entity);
 	_ipmi_entity_get(info->shelf_entity);
+
+	/* We added FRU info, report it. */
+	_ipmi_entity_call_fru_handlers(info->shelf_entity, IPMI_ADDED);
     }
 
     info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
