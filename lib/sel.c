@@ -1196,10 +1196,10 @@ free_all_event(ilist_iter_t *iter, void *item, void *cb_data)
     ipmi_sel_info_t    *sel = cb_data;
 
     if (holder->deleted) {
-	ilist_delete(iter);
 	sel->del_sels--;
 	holder->cancelled = 1;
     }
+    ilist_delete(iter);
     sel_event_holder_put(holder);
 }
 
@@ -1436,7 +1436,7 @@ handle_sel_check(ipmi_mc_t  *mc,
 	    goto out;
 	}
 
-	if (event_cmp(ch_event, data->event) != 0) {
+	if (data->event && (event_cmp(ch_event, data->event) != 0)) {
 	    /* The event's don't match, so just finish. */
 	    ipmi_event_free(ch_event);
 	    sel_op_done(data, 0, 1);
@@ -1551,13 +1551,26 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
     }
 
     data->reservation = ipmi_get_uint16(rsp->data+1);
-    rv = send_check_sel(data, mc);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%ssel.c(sel_reserved_for_delete): "
-		 "Could not send SEL get command: %x", sel->name, rv);
-	sel_op_done(data, rv, 1);
-	goto out;
+    if (!data->do_clear || data->event) {
+	rv = send_check_sel(data, mc);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%ssel.c(sel_reserved_for_delete): "
+		     "Could not send SEL get command: %x", sel->name, rv);
+	    sel_op_done(data, rv, 1);
+	    goto out;
+	}
+    } else {
+	/* We are clearing the SEL and the user didn't supply an
+	   event.  Don't worry about checking anything. */
+	rv = send_del_clear(data, mc);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%ssel.c(sel_reserved_for_delete): "
+		     "Could not send SEL clear command: %x", sel->name, rv);
+	    sel_op_done(data, rv, 1);
+	    goto out;
+	}
     }
 
     sel_unlock(sel);
@@ -1634,7 +1647,7 @@ start_del_sel(void *cb_data, int shutdown)
 	return OPQ_HANDLER_ABORTED;
     }
 
-    if (data->holder->cancelled) {
+    if (data->holder && data->holder->cancelled) {
 	/* Deleted by a clear, everything is ok. */
 	sel_op_done(data, 0, 0);
 	return OPQ_HANDLER_ABORTED;
@@ -1671,9 +1684,9 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
     ipmi_sel_info_t       *sel = info->sel;
     ipmi_event_t          *event = info->event;
     int                   cmp_event = info->cmp_event;
-    sel_event_holder_t    *real_holder;
+    sel_event_holder_t    *real_holder = NULL;
     ilist_iter_t          iter;
-    int                   start_fetch;
+    int                   start_fetch = 0;
 
     sel_lock(sel);
     if (sel->destroyed) {
@@ -1681,33 +1694,34 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
 	goto out_unlock;
     }
 
-    ilist_init_iter(&iter, sel->events);
-    ilist_unpositioned(&iter);
-    real_holder = ilist_search_iter(&iter, recid_search_cmp,
+    if (event) {
+	ilist_init_iter(&iter, sel->events);
+	ilist_unpositioned(&iter);
+	real_holder = ilist_search_iter(&iter, recid_search_cmp,
 				    &info->record_id);
-    if (!real_holder) {
-	info->rv = EINVAL;
-	goto out_unlock;
-    }
-
-    if (cmp_event && (event_cmp(event, real_holder->event) != 0)) {
-	info->rv = EINVAL;
-	goto out_unlock;
-    }
-
-    if (! info->do_clear) {
-	if (real_holder->deleted) {
+	if (!real_holder) {
 	    info->rv = EINVAL;
 	    goto out_unlock;
 	}
 
-	real_holder->deleted = 1;
-	sel->num_sels--;
-	sel->del_sels++;
+	if (cmp_event && (event_cmp(event, real_holder->event) != 0)) {
+	    info->rv = EINVAL;
+	    goto out_unlock;
+	}
 
-	start_fetch = (sel->num_sels == 0) && (sel->del_sels > 1);
-    } else
-	start_fetch = 0;
+	if (! info->do_clear) {
+	    if (real_holder->deleted) {
+		info->rv = EINVAL;
+		goto out_unlock;
+	    }
+
+	    real_holder->deleted = 1;
+	    sel->num_sels--;
+	    sel->del_sels++;
+
+	    start_fetch = (sel->num_sels == 0) && (sel->del_sels > 1);
+	}
+    }
 
     /* Note that at this point we cannot check num_sels to see if it
        is zero and do a bulk clear.  A new event might be added to the
@@ -1745,8 +1759,9 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
 	data->count = 0;
 	data->event = event;
 	data->holder = real_holder;
+	if (real_holder)
+	    sel_event_holder_get(real_holder);
 	data->do_clear = info->do_clear;
-	sel_event_holder_get(real_holder);
 	event = NULL;
 
 	sel_unlock(sel);
@@ -1819,8 +1834,12 @@ ipmi_sel_clear(ipmi_sel_info_t       *sel,
 	       ipmi_sel_op_done_cb_t handler,
 	       void                  *cb_data)
 {
-    return sel_del_event(sel, last_event, ipmi_event_get_record_id(last_event),
-			 handler, cb_data, 1, 1);
+    int cmp_event = (last_event != NULL);
+    unsigned int record_id = 0;
+    if (last_event)
+	record_id = ipmi_event_get_record_id(last_event);
+    return sel_del_event(sel, last_event, record_id, handler, cb_data,
+			 cmp_event, 1);
 }
 
 int
