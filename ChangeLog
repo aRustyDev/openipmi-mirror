@@ -1,5 +1,9 @@
 2005-10-13 Corey Minyard <cminyard@mvista.com>
 	
+	* lib/oem_intel.c: Add support for the Intel SE7520 motherboard.
+
+2005-10-13 Corey Minyard <cminyard@mvista.com>
+	
 	* cmdlang/Makefile.am: Fix the clean to work properly.
 	* glib/Makefile.am: ditto
 	* lanserv/Makefile.am: ditto
