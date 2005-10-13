@@ -34,5 +34,4 @@ ipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(SNMPLIBS) $(GLIB_LIB) $(GLIB_LIBS)
 
-clean:
-	rm -f *.map
+CLEANFILES = libOpenIPMIcmdlang.map
