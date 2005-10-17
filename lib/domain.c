@@ -319,6 +319,8 @@ struct ipmi_domain_s
     unsigned int option_OEM_init : 1;
     unsigned int option_set_event_rcvr : 1;
     unsigned int option_set_sel_time : 1;
+    unsigned int option_local_only : 1;
+    unsigned int option_local_only_set : 1;
 };
 
 /* A list of all domains in the system. */
@@ -767,6 +769,8 @@ setup_domain(char          *name,
     domain->option_all = 1;
     domain->option_set_event_rcvr = 1;
     domain->option_set_sel_time = 1;
+    domain->option_local_only = 0;
+    domain->option_local_only_set = 0;
 
     strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
@@ -4269,6 +4273,17 @@ ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
     return 0;
 }
 
+int
+_ipmi_domain_get_connection(ipmi_domain_t *domain,
+			    int           con_num,
+			    ipmi_con_t    **con)
+{
+    if (con_num >= MAX_CONS)
+	return EINVAL;
+    *con = domain->conn[con_num];
+    return 0;
+}
+
 void
 ipmi_domain_iterate_connections(ipmi_domain_t          *domain,
 				ipmi_connection_ptr_cb handler,
@@ -4538,6 +4553,20 @@ ipmi_option_set_sel_time(ipmi_domain_t *domain)
     return domain->option_set_sel_time;
 }
 
+int
+ipmi_option_local_only(ipmi_domain_t *domain)
+{
+    return domain->option_local_only;
+}
+
+void
+_ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain, int val)
+{
+    if (domain->option_local_only_set)
+	return;
+    domain->option_local_only = val != 0;
+}
+
 
 static int
 process_options(ipmi_domain_t      *domain, 
@@ -4572,6 +4601,10 @@ process_options(ipmi_domain_t      *domain,
 	    break;
 	case IPMI_OPEN_OPTION_SET_SEL_TIME:
 	    domain->option_set_sel_time = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_LOCAL_ONLY:
+	    domain->option_local_only = options[i].ival != 0;
+	    domain->option_local_only_set = 1;
 	    break;
 	default:
 	    return EINVAL;

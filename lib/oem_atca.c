@@ -190,6 +190,9 @@ struct atca_shelf_s
        device, it is only on the BMC. */
     unsigned int shelf_address_only_on_bmc : 1;
     unsigned int allow_sel_on_any : 1;
+
+    /* local blade-only connection */
+    unsigned int is_local : 1;
 };
 
 static void setup_from_shelf_fru(ipmi_domain_t *domain,
@@ -2817,32 +2820,35 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 
     ents = ipmi_domain_get_entities(domain);
 
-    /* Create the main shelf entity. */
-    name = "ATCA Shelf";
-    rv = ipmi_entity_add(ents, domain, 0, 0, 0,
-			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
-			 name, IPMI_ASCII_STR, strlen(name),
-			 atca_entity_sdr_add,
-			 NULL, &info->shelf_entity);
-    if (rv) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%soem_atca.c(setup_from_shelf_fru): "
-		 "Could not add chassis entity: %x",
-		 DOMAIN_NAME(domain), rv);
-	goto out;
-    }
+    if (!info->is_local) {
+	/* Create the main shelf entity. */
+	name = "ATCA Shelf";
+	rv = ipmi_entity_add(ents, domain, 0, 0, 0,
+			     IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
+			     name, IPMI_ASCII_STR, strlen(name),
+			     atca_entity_sdr_add,
+			     NULL, &info->shelf_entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(setup_from_shelf_fru): "
+		     "Could not add chassis entity: %x",
+		     DOMAIN_NAME(domain), rv);
+	    goto out;
+	}
 
-    /* Set up shelf FRU data for the shelf entity, and pass our shelf
-       fru onto the entity. */
-    ipmi_entity_set_is_logical_fru(info->shelf_entity, 1);
-    ipmi_entity_set_access_address(info->shelf_entity, info->shelf_fru_ipmb);
-    ipmi_entity_set_fru_device_id(info->shelf_entity,
-				  info->shelf_fru_device_id);
-    ipmi_entity_set_lun(info->shelf_entity, 0);
-    ipmi_entity_set_private_bus_id(info->shelf_entity, 0);
-    ipmi_entity_set_channel(info->shelf_entity, 0);
-    _ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
-    info->shelf_fru = NULL;
+	/* Set up shelf FRU data for the shelf entity, and pass our shelf
+	   fru onto the entity. */
+	ipmi_entity_set_is_logical_fru(info->shelf_entity, 1);
+	ipmi_entity_set_access_address(info->shelf_entity,
+				       info->shelf_fru_ipmb);
+	ipmi_entity_set_fru_device_id(info->shelf_entity,
+				      info->shelf_fru_device_id);
+	ipmi_entity_set_lun(info->shelf_entity, 0);
+	ipmi_entity_set_private_bus_id(info->shelf_entity, 0);
+	ipmi_entity_set_channel(info->shelf_entity, 0);
+	_ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
+	info->shelf_fru = NULL;
+    }
 
     /* Make sure the shelf entity is reported first. */
     if (info->shelf_entity) {
@@ -2958,15 +2964,18 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	ipmi_entity_set_physical_slot_num(b->frus[0]->entity, 1,
 					  info->addresses[i].site_num);
 
-	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(setup_from_shelf_fru): "
-		     "Could not add child ipmc: %x",
-		     DOMAIN_NAME(domain), rv);
-	    _ipmi_entity_put(b->frus[0]->entity);
-	    goto out;
+	if (info->shelf_entity) {
+	    rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
+	    if (rv) {
+		ipmi_log(IPMI_LOG_WARNING,
+			 "%soem_atca.c(setup_from_shelf_fru): "
+			 "Could not add child ipmc: %x",
+			 DOMAIN_NAME(domain), rv);
+		_ipmi_entity_put(b->frus[0]->entity);
+		goto out;
+	    }
 	}
+
 	add_address_control(info, b);
 	_ipmi_entity_put(b->frus[0]->entity);
     }
@@ -3264,7 +3273,8 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
     /* Remove all the parent/child relationships we previously
        defined. */
     _ipmi_domain_entity_lock(domain);
-    _ipmi_entity_get(info->shelf_entity);
+    if (info->shelf_entity)
+	_ipmi_entity_get(info->shelf_entity);
     _ipmi_domain_entity_unlock(domain);
     if (info->ipmcs) {
 	int i;
@@ -3276,14 +3286,17 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 		destroy_address_control(b);
 		destroy_fru_controls(b->frus[0]);
 
-		ipmi_entity_remove_child(info->shelf_entity,
-					 b->frus[0]->entity);
+		if (info->shelf_entity)
+		    ipmi_entity_remove_child(info->shelf_entity,
+					     b->frus[0]->entity);
 		_ipmi_entity_put(b->frus[0]->entity);
 	    }
 	}
     }
-    _ipmi_entity_remove_ref(info->shelf_entity);
-    _ipmi_entity_put(info->shelf_entity);
+    if (info->shelf_entity) {
+	_ipmi_entity_remove_ref(info->shelf_entity);
+	_ipmi_entity_put(info->shelf_entity);
+    }
 }
 
 static void
@@ -3500,6 +3513,161 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
  out:
     return;
 }
+
+/***********************************************************************
+ *
+ * Blade-only setup
+ *
+ **********************************************************************/
+static int
+atca_blade_info(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_msg_t   *msg = &rspi->msg;
+    atca_shelf_t *info;
+    int          rv = 0;
+
+    if (!domain)
+	return IPMI_MSG_ITEM_NOT_USED;
+
+    info = ipmi_domain_get_oem_data(domain);
+
+    if (msg->data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_blade_info): "
+		 "Error getting address information: 0x%x",
+		 DOMAIN_NAME(domain), msg->data[0]);
+	rv = EINVAL;
+	goto out_err;
+    }
+
+    if (msg->data_len < 8) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_blade_info): "
+		 "ATCA get address response not long enough",
+		 DOMAIN_NAME(domain));
+	rv = EINVAL;
+	goto out_err;
+    }
+
+    /* Only one IPMC */
+    info->num_addresses = 1;
+    info->addresses = ipmi_mem_alloc(sizeof(atca_address_t));
+    if (!info->addresses) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_blade_info): "
+		 "could not allocate memory for shelf addresses",
+		 DOMAIN_NAME(domain));
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    info->addresses[0].hw_address = msg->data[2];
+    info->addresses[0].site_type = msg->data[7];
+    info->addresses[0].site_num = msg->data[6];
+
+ out_err:
+    info->startup_done(domain, rv, info->startup_done_cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static void
+set_up_atca_blade(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
+		  ipmi_domain_oem_check_done done, void *done_cb_data)
+{
+    ipmi_system_interface_addr_t si, saddr;
+    ipmi_msg_t                   msg;
+    unsigned char 		 data[1];
+    ipmi_mc_t                    *mc;
+    atca_shelf_t                 *info;
+    int                          rv;
+
+    if (get_properties->data_len < 5) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(set_up_atca_blade): "
+		 "ATCA get address response not long enough",
+		 DOMAIN_NAME(domain));
+	done(domain, EINVAL, done_cb_data);
+	goto out;
+    }
+
+    info = ipmi_domain_get_oem_data(domain);
+    if (info) {
+	/* We have already initialized this domain, ignore this. */
+	done(domain, 0, done_cb_data);
+	goto out;
+    }
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(set_up_atca_blade): "
+		 "Could not allocate ATCA information structure",
+		 DOMAIN_NAME(domain));
+	done(domain, ENOMEM, done_cb_data);
+	goto out;
+    }
+    memset(info, 0, sizeof(*info));
+    info->is_local = 1;
+
+    info->next_address_control_num = FIRST_IPMC_ADDRESS_NUM;
+
+    saddr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    saddr.channel = IPMI_BMC_CHANNEL;
+    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &saddr, sizeof(saddr));
+    if (!mc) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(set_up_atca_blade): "
+		 "Could not find system interface MC, assuming this is"
+		 " a valid working ATCA chassis",
+		 DOMAIN_NAME(domain));
+    } else {
+	info->mfg_id = ipmi_mc_manufacturer_id(mc);
+	info->prod_id = ipmi_mc_product_id(mc);
+	_ipmi_mc_put(mc);
+    }
+
+    info->startup_done = done;
+    info->startup_done_cb_data = done_cb_data;
+    info->domain = domain;
+
+    /* Completely turn off scanning. */
+    ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0xff);
+
+    ipmi_domain_set_oem_data(domain, info, atca_oem_data_destroyer);
+    ipmi_domain_set_oem_shutdown_handler(domain,
+					 atca_oem_domain_shutdown_handler);
+
+    ipmi_domain_set_con_up_handler(domain, atca_con_up, info);
+
+    ipmi_domain_add_new_sensor_handler(domain, atca_new_sensor_handler, NULL);
+
+    /* Send the ATCA Get Address Info command to get the blad info. */
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_ADDRESS_INFO;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    msg.data = data;
+    msg.data_len = 1;
+
+    rv = ipmi_send_command_addr(domain,
+				(ipmi_addr_t *) &si, sizeof(si),
+				&msg,
+				atca_blade_info, NULL, NULL);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(set_up_atca_blade): "
+		 "Could not send get addrss command",
+		 DOMAIN_NAME(domain));
+	done(domain, ENOMEM, done_cb_data);
+	goto out;
+    }
+
+ out:
+    return;
+}
+
 
 /***********************************************************************
  *
@@ -3790,6 +3958,18 @@ atca_register_fixups(void)
  *
  **********************************************************************/
 
+static void
+check_if_local(ipmi_domain_t *domain, int conn, void *cb_data)
+{
+    ipmi_con_t *con;
+
+    if (_ipmi_domain_get_connection(domain, conn, &con))
+	return;
+    if (con->name && (strcmp(con->name, "smi") == 0))
+	/* It's a system management interface. */
+	_ipmi_option_set_local_only_if_not_specified(domain, 1);
+}
+
 static int
 check_if_atca_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
@@ -3801,8 +3981,16 @@ check_if_atca_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
     if (msg->data[0] == 0) {
 	/* It's an ATCA system, set it up */
-	ipmi_domain_set_type(domain, IPMI_DOMAIN_TYPE_ATCA);
-	set_up_atca_domain(domain, msg, done, rspi->data2);
+	ipmi_domain_iterate_connections(domain, check_if_local, NULL);
+	if (ipmi_option_local_only(domain)) {
+	    /* Only hook to the local blade. */
+	    ipmi_domain_set_type(domain, IPMI_DOMAIN_TYPE_ATCA_BLADE);
+	    set_up_atca_blade(domain, msg, done, rspi->data2);
+	} else {
+	    /* Do the entire system. */
+	    ipmi_domain_set_type(domain, IPMI_DOMAIN_TYPE_ATCA);
+	    set_up_atca_domain(domain, msg, done, rspi->data2);
+	}
     } else {
 	done(domain, ENOSYS, rspi->data2);
     }
@@ -3818,7 +4006,7 @@ check_if_atca(ipmi_domain_t              *domain,
     ipmi_msg_t                   msg;
     unsigned char 		 data[5];
 
-    /* Send the ATCA Get Address Info command to get the shelf FRU info. */
+    /* Send the ATCA Get Properties to know if we are ATCA. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;
