@@ -522,7 +522,7 @@ set_ipmb_in_dev(smi_data_t *smi)
 static void
 ipmb_handler(ipmi_con_t    *ipmi,
 	     int           err,
-	     unsigned char ipmb_addr[],
+	     const unsigned char ipmb_addr[],
 	     unsigned int  num_ipmb_addr,
 	     int           active,
 	     unsigned int  hacks,
@@ -1165,7 +1165,7 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 
 static void
 smi_set_ipmb_addr(ipmi_con_t    *ipmi,
-		  unsigned char ipmb_addr[],
+		  const unsigned char ipmb_addr[],
 		  unsigned int  num_ipmb_addr,
 		  int           active,
 		  unsigned int  hacks)
@@ -1226,7 +1226,7 @@ finish_connection(ipmi_con_t *ipmi, smi_data_t *smi)
 static void
 handle_ipmb_addr(ipmi_con_t    *ipmi,
 		 int           err,
-		 unsigned char ipmb_addr[],
+		 const unsigned char ipmb_addr[],
 		 unsigned int  num_ipmb_addr,
 		 int           active,
 		 unsigned int  hacks,

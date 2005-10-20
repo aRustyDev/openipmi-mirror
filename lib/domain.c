@@ -4090,7 +4090,7 @@ static void start_activate_timer(ipmi_domain_t *domain);
 static void
 initial_ipmb_addr_cb(ipmi_con_t    *ipmi,
 		     int           err,
-		     unsigned char ipmb_addr[],
+		     const unsigned char ipmb_addr[],
 		     unsigned int  num_ipmb_addr,
 		     int           active,
 		     unsigned int  hacks,
@@ -4130,7 +4130,7 @@ initial_ipmb_addr_cb(ipmi_con_t    *ipmi,
 
 static void ll_addr_changed(ipmi_con_t    *ipmi,
 			    int           err,
-			    unsigned char ipmb_addr[],
+			    const unsigned char ipmb_addr[],
 			    unsigned int  num_ipmb_addr,
 			    int           active,
 			    unsigned int  hacks,
@@ -4352,7 +4352,7 @@ start_activate_timer(ipmi_domain_t *domain)
 static void
 ll_addr_changed(ipmi_con_t    *ipmi,
 		int           err,
-		unsigned char ipmb_addr[],
+		const unsigned char ipmb_addr[],
 		unsigned int  num_ipmb_addr,
 		int           active,
 		unsigned int  hacks,

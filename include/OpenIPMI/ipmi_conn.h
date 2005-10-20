@@ -97,7 +97,7 @@ typedef void (*ipmi_ll_con_changed_cb)(ipmi_con_t   *ipmi,
    Set the IPMB to 0 if unknown. */
 typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t    *ipmi,
 				     int           err,
-				     unsigned char ipmb_addr[],
+				     const unsigned char ipmb_addr[],
 				     unsigned int  num_ipmb_addr,
 				     int           active,
 				     unsigned int  hacks,
@@ -163,7 +163,7 @@ struct ipmi_con_s
        use this to change it.  The hacks are the same as the ones in
        the IPMB address handler. */
     void (*set_ipmb_addr)(ipmi_con_t    *ipmi,
-			  unsigned char ipmb_addr[],
+			  const unsigned char ipmb_addr[],
 			  unsigned int  num_ipmb_addr,
 			  int           active,
 			  unsigned int  hacks);

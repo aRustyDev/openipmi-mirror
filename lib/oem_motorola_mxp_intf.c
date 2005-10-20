@@ -799,7 +799,7 @@ deliver(ipmi_con_t *ipmi, msg_del_t *del)
 static void
 ipmb_handler(ipmi_con_t    *ipmi,
 	     int           err,
-	     unsigned char ipmb_addr[],
+	     const unsigned char ipmb_addr[],
 	     unsigned int  num_ipmb_addr,
 	     int           active,
 	     unsigned int  hacks,
@@ -2518,7 +2518,7 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 
 static void
 lan_set_ipmb_addr(ipmi_con_t    *ipmi,
-		  unsigned char ipmb_addr[],
+		  const unsigned char ipmb_addr[],
 		  unsigned int  num_ipmb_addr,
 		  int           active,
 		  unsigned int  hacks)
@@ -2546,7 +2546,7 @@ lan_set_ipmb_addr(ipmi_con_t    *ipmi,
 static void
 handle_ipmb_addr(ipmi_con_t    *ipmi,
 		 int           err,
-		 unsigned char ipmb_addr[],
+		 const unsigned char ipmb_addr[],
 		 unsigned int  num_ipmb_addr,
 		 int           active,
 		 unsigned int  hacks,
