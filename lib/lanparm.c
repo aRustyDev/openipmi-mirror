@@ -2006,7 +2006,7 @@ LP_ARRAY_TAB(alert_dest_addr, dest_mac_addr, 6)
 typedef struct lanparm_gendata_s
 {
     enum ipmi_lanconf_val_type_e datatype;
-    unsigned char *fname;
+    char *fname;
 
     union {
 	struct {

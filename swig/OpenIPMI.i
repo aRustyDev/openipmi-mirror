@@ -201,14 +201,14 @@ parse_ipmi_data(intarray data, unsigned char *odata,
     return 0;
 }
 
-static char *
+static unsigned char *
 parse_raw_str_data(char *str, unsigned int *length)
 {
     char *s = str;
     int  inspace = 1;
     int  count = 0;
     int  i;
-    char *rv;
+    unsigned char *rv;
     char *endstr;
 
     while (*s) {
@@ -7432,7 +7432,7 @@ int pef_str_to_parm(char *str);
 	    return ipmi_fru_set_time_val(self, index, num, val);
 	} else if (strcmp(type, "binary") == 0) {
 	    unsigned int length = 0;
-	    char *data;
+	    unsigned char *data;
 	    int rv;
 	    if (!value) {
 		data = NULL;
@@ -7442,13 +7442,13 @@ int pef_str_to_parm(char *str);
 		    return ENOMEM;
 	    }
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_BINARY,
-				       data, length);
+				       (char *) data, length);
 	    if (data)
 		free(data);
 	    return rv;
 	} else if (strcmp(type, "unicode") == 0) {
 	    unsigned int length = 0;
-	    char *data;
+	    unsigned char *data;
 	    int rv;
 	    if (!value) {
 		data = NULL;
@@ -7458,7 +7458,7 @@ int pef_str_to_parm(char *str);
 		    return ENOMEM;
 	    }
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_UNICODE,
-				       data, length);
+				       (char *) data, length);
 	    if (data)
 		free(data);
 	    return rv;
@@ -7510,7 +7510,7 @@ int pef_str_to_parm(char *str);
 	    return ipmi_fru_set_time_val(self, index, num, value.val[0]);
 	} else if (strcmp(type, "binary") == 0) {
 	    unsigned int length = value.len;
-	    char *data;
+	    unsigned char *data;
 	    int rv;
 
 	    if (length == 0)
@@ -7521,23 +7521,23 @@ int pef_str_to_parm(char *str);
 		return ENOMEM;
 	    parse_ipmi_data(value, data, length, &length);
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_BINARY,
-				       data, length);
+				       (char *) data, length);
 	    free(data);
 	    return rv;
 	} else if (strcmp(type, "unicode") == 0) {
 	    unsigned int length = value.len;
-	    char *data = malloc(length);
+	    unsigned char *data = malloc(length);
 	    int rv;
 	    if (!data)
 		return EINVAL;
 	    parse_ipmi_data(value, data, length, &length);
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_UNICODE,
-				       data, length);
+				       (char *) data, length);
 	    free(data);
 	    return rv;
 	} else if (strcmp(type, "ascii") == 0) {
 	    unsigned int length = value.len;
-	    char *data;
+	    unsigned char *data;
 	    int rv;
 	    if (length == 0)
 		data = malloc(1);
@@ -7547,7 +7547,7 @@ int pef_str_to_parm(char *str);
 		return ENOMEM;
 	    parse_ipmi_data(value, data, length, &length);
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_ASCII,
-				       data, length);
+				       (char *) data, length);
 	    free(data);
 	    return rv;
 	} else {
@@ -7573,7 +7573,7 @@ int pef_str_to_parm(char *str);
 			char         *value = NULL)
     {
 	unsigned int length = 0;
-	char *data;
+	unsigned char *data;
 	int rv;
 
 	if (!value) {
@@ -7608,7 +7608,7 @@ int pef_str_to_parm(char *str);
 			      intarray     value)
     {
 	unsigned int length = value.len;
-	char *data;
+	unsigned char *data;
 	int rv;
 
 	if (length == 0)
@@ -7648,7 +7648,7 @@ int pef_str_to_parm(char *str);
      * Get the offset of the given area into the offset pointer.
      */
     int area_get_offset(unsigned int area,
-			int          *offset)
+			unsigned int *offset)
     {
 	return ipmi_fru_area_get_offset(self, area, offset);
     }
@@ -7657,7 +7657,7 @@ int pef_str_to_parm(char *str);
      * Get the length of the given area into the length pointer.
      */
     int area_get_length(unsigned int area,
-			int          *length)
+			unsigned int *length)
     {
 	return ipmi_fru_area_get_length(self, area, length);
     }
@@ -7685,7 +7685,7 @@ int pef_str_to_parm(char *str);
      * the used_length pointer.
      */
     int area_get_used_length(unsigned int area,
-			     int          *used_length)
+			     unsigned int *used_length)
     {
 	return ipmi_fru_area_get_used_length(self, area, used_length);
     }
@@ -8589,7 +8589,7 @@ int pef_str_to_parm(char *str);
 		return EINVAL;
 	    if (!value)
 		return EINVAL;
-	    dval = strdup((char *) value);
+	    dval = (unsigned char *) strdup((char *) value);
 	    if (!dval)
 		return ENOMEM;
 	    break;

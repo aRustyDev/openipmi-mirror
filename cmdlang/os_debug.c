@@ -435,7 +435,7 @@ database_store(os_handler_t  *handler,
 
     gkey.dptr = key;
     gkey.dsize = strlen(key);
-    gdata.dptr = data;
+    gdata.dptr = (char *) data;
     gdata.dsize = data_len;
 
     rv = gdbm_store(gdbmf, gkey, gdata, GDBM_REPLACE);
@@ -469,7 +469,7 @@ database_find(os_handler_t  *handler,
     gdata = gdbm_fetch(gdbmf, gkey);
     if (!gdata.dptr)
 	return EINVAL;
-    *data = gdata.dptr;
+    *data = (unsigned char *) gdata.dptr;
     *data_len = gdata.dsize;
     *fetch_completed = 1;
     return 0;

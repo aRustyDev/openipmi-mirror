@@ -549,7 +549,7 @@ fru_decode_string(ipmi_fru_t     *fru,
 		  fru_variable_t *strs,
 		  unsigned int   num)
 {
-    unsigned char str[IPMI_MAX_STR_LEN+1];
+    char          str[IPMI_MAX_STR_LEN+1];
     int           force_unicode;
     fru_string_t  *out = strs->strings + num;
     unsigned char *in_start;
@@ -3998,9 +3998,11 @@ ipmi_fru_get(ipmi_fru_t                *fru,
 		    break;
 		}
 		if (! p->hasnum) {
-		    rv = p->u.bintype.fetch_data(fru, (char *) dval, &len);
+		    rv = p->u.bintype.fetch_data(fru, (unsigned char *) dval,
+						 &len);
 		} else {
-		    rv = p->u.binnumtype.fetch_data(fru, *num, (char *) dval,
+		    rv = p->u.binnumtype.fetch_data(fru, *num,
+						    (unsigned char *) dval,
 						    &len);
 		}
 		if (rv)
@@ -4131,9 +4133,9 @@ ipmi_fru_set_data_val(ipmi_fru_t                *fru,
 
     case IPMI_FRU_DATA_BINARY:
 	if (! p->hasnum) {
-	    rv = p->u.bintype.set(fru, data, len);
+	    rv = p->u.bintype.set(fru, (unsigned char *) data, len);
 	} else {
-	    rv = p->u.binnumtype.set(fru, num, data, len);
+	    rv = p->u.binnumtype.set(fru, num, (unsigned char *) data, len);
 	}
 	break;
 

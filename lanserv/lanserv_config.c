@@ -172,7 +172,7 @@ read_16(char **tokptr, unsigned char *data, char **err)
 	    return -1;
 	}
 	tok[end] = '\0';
-	strncpy(data, tok, 16);
+	strncpy((char *) data, tok, 16);
 	cleanup_ascii_16(data);
     } else {
 	int  i;

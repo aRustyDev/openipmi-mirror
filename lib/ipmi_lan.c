@@ -118,7 +118,7 @@ typedef struct lan_wait_queue_s
     ipmi_addr_t           addr;
     unsigned int          addr_len;
     ipmi_msg_t            msg;
-    char                  data[IPMI_MAX_MSG_LENGTH];
+    unsigned char         data[IPMI_MAX_MSG_LENGTH];
     ipmi_ll_rsp_handler_t rsp_handler;
     ipmi_msgi_t           *rsp_item;
 
@@ -1496,7 +1496,7 @@ data_handler(int            fd,
     if ((addr3->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
 	|| (addr3->addr_type == IPMI_IPMB_ADDR_TYPE))
     {
-	ipmi_ipmb_addr_t *ipmb2 =(ipmi_ipmb_addr_t *) addr3;
+	ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *) addr3;
 	chan = ipmb2->channel;
     } else
 	chan = 0;

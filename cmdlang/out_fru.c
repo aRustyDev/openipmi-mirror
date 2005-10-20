@@ -150,7 +150,7 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     for (i=0; i<num_multi; i++) {
 	unsigned char type, ver;
 	unsigned int  len;
-	char          *data = NULL;
+	unsigned char *data = NULL;
 
 	rv = ipmi_fru_get_multi_record_type(fru, i, &type);
 	if (!rv)
@@ -179,7 +179,7 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_out_int(cmd_info, "Type", type);
 	ipmi_cmdlang_out_int(cmd_info, "Number", i);
-	fru_out_data(cmd_info, IPMI_BINARY_STR, data, len);
+	fru_out_data(cmd_info, IPMI_BINARY_STR, (char *) data, len);
 	ipmi_cmdlang_up(cmd_info);
 	ipmi_mem_free(data);
     }
