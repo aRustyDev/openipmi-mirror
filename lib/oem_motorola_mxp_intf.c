@@ -186,7 +186,7 @@ typedef struct lan_data_s
     unsigned int               swid;
     int                        fd;
 
-    unsigned char              slave_addr;
+    unsigned char              slave_addr[MAX_IPMI_USED_CHANNELS];
     int                        is_active;
 
     int                        curr_ip_addr;
@@ -797,24 +797,34 @@ deliver(ipmi_con_t *ipmi, msg_del_t *del)
 }
 
 static void
-ipmb_handler(ipmi_con_t   *ipmi,
-	     int          err,
-	     unsigned int ipmb,
-	     int          active,
-	     unsigned int hacks,
-	     void         *cb_data)
+ipmb_handler(ipmi_con_t    *ipmi,
+	     int           err,
+	     unsigned char ipmb_addr[],
+	     unsigned int  num_ipmb_addr,
+	     int           active,
+	     unsigned int  hacks,
+	     void          *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        changed = 0;
+    int        i;
 
     if (err)
 	return;
 
-    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
-	lan->slave_addr = ipmb;
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	if (ipmb_addr[i] != lan->slave_addr[i]) {
+	    lan->slave_addr[i] = ipmb_addr[i];
+	    changed = 1;
+	}
+    }
+    if (changed || (lan->is_active != active))  {
 	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, 0,
-				   lan->ipmb_addr_cb_data);
+	    lan->ipmb_addr_handler(ipmi, err, ipmb_addr, num_ipmb_addr,
+				   active, 0, lan->ipmb_addr_cb_data);
     }
 }
 
@@ -1759,7 +1769,7 @@ data_handler(int            fd,
 		    start_next_msg(ipmi, lan);
 		} else if (tmsg[6] == 0x82) {
 		    ipmi_msg_t msg;
-		    char data[3];
+		    unsigned char data[3];
 		    unsigned char *addr;
 
 		    /* We got an IPMB problem, send an auto-isolate to
@@ -2080,6 +2090,9 @@ lan_send_command(ipmi_con_t            *ipmi,
     } else {
 	ipmi_ipmb_addr_t *ipmb = (void *) addr;
 
+	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS)
+	    return EINVAL;
+
 	ipmi_lock(lan->msg_queue_lock);
 	if (QUEUE_NEXT(lan->next_msg) == lan->curr_msg) {
 	    rv = EAGAIN;
@@ -2094,7 +2107,7 @@ lan_send_command(ipmi_con_t            *ipmi,
 	lan->msg_queue[msg_num].addr_len = addr_len;
 	lan->msg_queue[msg_num].use_orig_addr = 0;
 
-	if (ipmb->slave_addr == lan->slave_addr) {
+	if (ipmb->slave_addr == lan->slave_addr[ipmb->channel]) {
 	    /* We take messages to ourself and route them as a queued
                message to the system interface. */
 	    ipmi_system_interface_addr_t *si;
@@ -2505,42 +2518,59 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 
 static void
 lan_set_ipmb_addr(ipmi_con_t    *ipmi,
-		  unsigned char ipmb,
+		  unsigned char ipmb_addr[],
+		  unsigned int  num_ipmb_addr,
 		  int           active,
 		  unsigned int  hacks)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        changed = 0;
+    int        i;
 
-    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
-	lan->slave_addr = ipmb;
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	if (lan->slave_addr[i] != ipmb_addr[i]) {
+	    lan->slave_addr[i] = ipmb_addr[i];
+	    changed = 1;
+	}
+    }
+    if (changed || (lan->is_active != active))  {
 	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, 0,
-				   lan->ipmb_addr_cb_data);
+	    lan->ipmb_addr_handler(ipmi, 0, ipmb_addr, num_ipmb_addr,
+				   active, 0, lan->ipmb_addr_cb_data);
     }
 }
 
 static void
-handle_ipmb_addr(ipmi_con_t   *ipmi,
-		 int          err,
-		 unsigned int ipmb_addr,
-		 int          active,
-		 unsigned int hacks,
-		 void         *cb_data)
+handle_ipmb_addr(ipmi_con_t    *ipmi,
+		 int           err,
+		 unsigned char ipmb_addr[],
+		 unsigned int  num_ipmb_addr,
+		 int           active,
+		 unsigned int  hacks,
+		 void          *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        addr_num = (long) cb_data;
+    int        i;
 
     if (err) {
 	handle_connected(ipmi, err);
 	return;
     }
 
-    lan->slave_addr = ipmb_addr;
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	lan->slave_addr[i] = ipmb_addr[i];
+    }
+
     lan->is_active = active;
     finish_connection(ipmi, lan, addr_num);
     if (lan->ipmb_addr_handler)
-	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, 0,
+	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, num_ipmb_addr, active, 0,
 			       lan->ipmb_addr_cb_data);
 }
 
@@ -3080,7 +3110,8 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
 
     lan->refcount = 1;
     lan->ipmi = ipmi;
-    lan->slave_addr = 0x20; /* Assume this until told otherwise */
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++)
+	lan->slave_addr[i] = 0x20; /* Assume this until told otherwise */
     lan->is_active = 1;
     lan->authtype = authtype;
     lan->privilege = privilege;

@@ -151,7 +151,7 @@ typedef struct lan_data_s
     ipmi_con_t                 *ipmi;
     int                        fd;
 
-    unsigned char              slave_addr;
+    unsigned char              slave_addr[MAX_IPMI_USED_CHANNELS];
     int                        is_active;
 
     /* Protects modifiecations to ip_working, curr_ip_addr, RMCP
@@ -492,7 +492,7 @@ lan_send_addr(lan_data_t        *lan,
 	if (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	    tmsg[0] = 0x20;
 	else
-	    tmsg[0] = lan->slave_addr; /* To the BMC. */
+	    tmsg[0] = lan->slave_addr[0]; /* To the BMC. */
 	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
 	tmsg[2] = ipmb_checksum(tmsg, 2);
 	tmsg[3] = 0x81; /* Remote console IPMI Software ID */
@@ -508,11 +508,15 @@ lan_send_addr(lan_data_t        *lan,
            command. */
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
 
+	if (ipmb_addr->channel >= MAX_IPMI_USED_CHANNELS)
+	    return EINVAL;
+
 	pos = 0;
 	if (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	    tmsg[pos++] = 0x20;
 	else
-	    tmsg[pos++] = lan->slave_addr; /* BMC is the bridge. */
+	    /* BMC is the bridge. */
+	    tmsg[pos++] = lan->slave_addr[ipmb_addr->channel];
 	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
 	tmsg[pos++] = ipmb_checksum(tmsg, 2);
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
@@ -530,7 +534,7 @@ lan_send_addr(lan_data_t        *lan,
 	tmsg[pos++] = (msg->netfn << 2) | ipmb_addr->lun;
 	tmsg[pos++] = ipmb_checksum(tmsg+msgstart, 2);
 	msgstart = pos;
-	tmsg[pos++] = lan->slave_addr;
+	tmsg[pos++] = lan->slave_addr[ipmb_addr->channel];
 	tmsg[pos++] = (seq << 2) | 2; /* add 2 as the SMS LUN */
 	tmsg[pos++] = msg->cmd;
 	memcpy(tmsg+pos, msg->data, msg->data_len);
@@ -638,27 +642,37 @@ lan_send(lan_data_t        *lan,
 }
 
 static void
-ipmb_handler(ipmi_con_t   *ipmi,
-	     int          err,
-	     unsigned int ipmb,
-	     int          active,
-	     unsigned int hacks,
-	     void         *cb_data)
+ipmb_handler(ipmi_con_t    *ipmi,
+	     int           err,
+	     unsigned char ipmb_addr[],
+	     unsigned int  num_ipmb_addr,
+	     int           active,
+	     unsigned int  hacks,
+	     void          *cb_data)
 {
     lan_data_t *lan;
+    int        changed = 0;
+    int        i;
 
     if (err)
 	return;
 
     lan = (lan_data_t *) ipmi->con_data;
 
-    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
-	lan->slave_addr = ipmb;
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	if (ipmb_addr[i] != lan->slave_addr[i]) {
+	    lan->slave_addr[i] = ipmb_addr[i];
+	    changed = 1;
+	}
+    }
+    if (changed || (lan->is_active != active))  {
 	lan->is_active = active;
 	lan->hacks = hacks;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, lan->hacks,
-				   lan->ipmb_addr_cb_data);
+	    lan->ipmb_addr_handler(ipmi, err, ipmb_addr, num_ipmb_addr,
+				   active, lan->hacks, lan->ipmb_addr_cb_data);
     }
 }
 
@@ -1113,7 +1127,10 @@ handle_msg_send(lan_timer_info_t      *info,
     {
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 
-	if (ipmb->slave_addr == lan->slave_addr) {
+	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS)
+	    return EINVAL;
+
+	if (ipmb->slave_addr == lan->slave_addr[ipmb->channel]) {
 	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
 	    /* Most systems don't handle sending to your own slave
                address, so we have to translate here. */
@@ -1267,6 +1284,7 @@ data_handler(int            fd,
     unsigned int       data_len;
     int                recv_addr;
     int                ip_num;
+    int                chan;
     
     ipmi_ll_rsp_handler_t handler;
     ipmi_msgi_t           *rspi;
@@ -1475,13 +1493,22 @@ data_handler(int            fd,
 	   response. */
 	goto out;
     addr3 = &lan->seq_table[seq].addr;
+    if ((addr3->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	|| (addr3->addr_type == IPMI_IPMB_ADDR_TYPE))
+    {
+	ipmi_ipmb_addr_t *ipmb2 =(ipmi_ipmb_addr_t *) addr3;
+	chan = ipmb2->channel;
+    } else
+	chan = 0;
 
     if ((tmsg[5] == IPMI_SEND_MSG_CMD)
 	&& ((tmsg[1] >> 2) == (IPMI_APP_NETFN | 1)))
     {
 	/* It's a response to a sent message. */
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &addr;
-	ipmi_ipmb_addr_t *ipmb2 =(ipmi_ipmb_addr_t *)&lan->seq_table[seq].addr;
+	ipmi_ipmb_addr_t *ipmb2 =(ipmi_ipmb_addr_t *) addr3;
+
+	chan = ipmb2->channel;
 
 	/* FIXME - this entire thing is a cheap hack. */
 	if (tmsg[6] != 0) {
@@ -1506,7 +1533,7 @@ data_handler(int            fd,
 		   payload. */
 		goto out;
 
-	    if (tmsg[10] == lan->slave_addr) {
+	    if (tmsg[10] == lan->slave_addr[chan]) {
 		ipmi_system_interface_addr_t *si_addr
 		    = (ipmi_system_interface_addr_t *) &addr;
 
@@ -1576,7 +1603,7 @@ data_handler(int            fd,
 	       && (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 		    && (tmsg[3] == 0x20))
 		   || ((! (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		       && (tmsg[3] == lan->slave_addr))))
+		       && (tmsg[3] == lan->slave_addr[chan]))))
     {
         /* In some cases, a message from the IPMB looks like it came
 	   from the BMC itself, IMHO a misinterpretation of the
@@ -1597,7 +1624,7 @@ data_handler(int            fd,
 	if (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	     && (tmsg[3] == 0x20))
 	    || ((!(lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		&& (tmsg[3] == lan->slave_addr)))
+		&& (tmsg[3] == lan->slave_addr[chan])))
 	{
 	    ipmi_system_interface_addr_t *si_addr
 		= (ipmi_system_interface_addr_t *) &addr;
@@ -2264,45 +2291,63 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 
 static void
 lan_set_ipmb_addr(ipmi_con_t    *ipmi,
-		  unsigned char ipmb,
+		  unsigned char ipmb_addr[],
+		  unsigned int  num_ipmb_addr,
 		  int           active,
 		  unsigned int  hacks)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        changed = 0;
+    int        i;
 
-    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
-	lan->slave_addr = ipmb;
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	if (lan->slave_addr[i] != ipmb_addr[i]) {
+	    lan->slave_addr[i] = ipmb_addr[i];
+	    changed = 1;
+	}
+    }
+
+    if (changed || (lan->is_active != active))  {
 	lan->is_active = active;
 	lan->hacks = hacks;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, lan->hacks,
-				   lan->ipmb_addr_cb_data);
+	    lan->ipmb_addr_handler(ipmi, 0, ipmb_addr, num_ipmb_addr,
+				   active, lan->hacks, lan->ipmb_addr_cb_data);
     }
 }
 
 static void
-handle_ipmb_addr(ipmi_con_t   *ipmi,
-		 int          err,
-		 unsigned int ipmb_addr,
-		 int          active,
-		 unsigned int hacks,
-		 void         *cb_data)
+handle_ipmb_addr(ipmi_con_t    *ipmi,
+		 int           err,
+		 unsigned char ipmb_addr[],
+		 unsigned int  num_ipmb_addr,
+		 int           active,
+		 unsigned int  hacks,
+		 void          *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        addr_num = (long) cb_data;
+    int        i;
 
     if (err) {
 	handle_connected(ipmi, err, addr_num);
 	return;
     }
 
-    lan->slave_addr = ipmb_addr;
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	lan->slave_addr[i] = ipmb_addr[i];
+    }
+
     lan->is_active = active;
     lan->hacks = hacks;
     finish_connection(ipmi, lan, addr_num);
     if (lan->ipmb_addr_handler)
-	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, lan->hacks,
-			       lan->ipmb_addr_cb_data);
+	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, num_ipmb_addr,
+			       active, lan->hacks, lan->ipmb_addr_cb_data);
 }
 
 static int
@@ -2982,7 +3027,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
     lan->refcount = 1;
     lan->ipmi = ipmi;
-    lan->slave_addr = 0x20; /* Assume this until told otherwise */
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++)
+	lan->slave_addr[i] = 0x20; /* Assume this until told otherwise */
     lan->is_active = 1;
     lan->specified_authtype = authtype;
     lan->chosen_authtype = IPMI_AUTHTYPE_DEFAULT;

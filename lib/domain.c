@@ -221,7 +221,7 @@ struct ipmi_domain_s
     int           working_conn;
     ipmi_con_t    *conn[MAX_CONS];
     int           con_active[MAX_CONS];
-    unsigned char con_ipmb_addr[MAX_CONS];
+    unsigned char con_ipmb_addr[MAX_CONS][MAX_IPMI_USED_CHANNELS];
 
     ipmi_ll_event_handler_id_t *ll_event_id[MAX_CONS];
 
@@ -787,7 +787,8 @@ setup_domain(char          *name,
 
     for (i=0; i<num_con; i++) {
 	domain->conn[i] = ipmi[i];
-	domain->con_ipmb_addr[i] = 0x20; /* Assume this until told othersize */
+	for (j=0; j<MAX_IPMI_USED_CHANNELS; j++)
+	    domain->con_ipmb_addr[i][j] = 0x20;
 	domain->con_active[i] = 1;
 	domain->con_up[i] = 0;
 
@@ -1389,10 +1390,12 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 }
 
 static int
-in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
+in_ipmb_ignores(ipmi_domain_t *domain,
+		unsigned char channel,
+		unsigned char ipmb_addr)
 {
     unsigned long addr;
-    unsigned char first, last;
+    unsigned char first, last, ichan;
     ilist_iter_t iter;
     int          rv = 0;
 
@@ -1403,7 +1406,8 @@ in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
 	addr = (unsigned long) ilist_get(&iter);
 	first = addr & 0xff;
 	last = (addr >> 8) & 0xff;
-	if ((ipmb_addr >= first) && (ipmb_addr <= last))
+	ichan = (addr >> 16) & 0xff;
+	if ((ichan == channel) && (ipmb_addr >= first) && (ipmb_addr <= last))
 	    rv = 1;
     }
     ipmi_unlock(domain->ipmb_ignores_lock);
@@ -1412,9 +1416,11 @@ in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
 }
 
 int
-ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain, unsigned char ipmb_addr)
+ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain,
+			    unsigned char channel,
+			    unsigned char ipmb_addr)
 {
-    unsigned long addr = ipmb_addr | (ipmb_addr << 8);
+    unsigned long addr = ipmb_addr | (ipmb_addr << 8) | (channel << 16);
     int           rv = 0;
 
     ipmi_lock(domain->ipmb_ignores_lock);
@@ -1427,10 +1433,12 @@ ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain, unsigned char ipmb_addr)
 
 int
 ipmi_domain_add_ipmb_ignore_range(ipmi_domain_t *domain,
+				  unsigned char channel,
 				  unsigned char first_ipmb_addr,
 				  unsigned char last_ipmb_addr)
 {
-    unsigned long addr = first_ipmb_addr | (last_ipmb_addr << 8);
+    unsigned long addr = (first_ipmb_addr | (last_ipmb_addr << 8)
+			  | (channel << 16));
     int           rv = 0;
 
     ipmi_lock(domain->ipmb_ignores_lock);
@@ -1771,13 +1779,16 @@ matching_domain_sysaddr(ipmi_domain_t *domain, const ipmi_addr_t *addr,
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 	int              i;
 
-	if (ipmb->channel != 0)
+	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS)
+	    return 0;
+
+	if (domain->chan[ipmb->channel].medium != IPMI_CHANNEL_MEDIUM_IPMB)
 	    return 0;
 
 	for (i=0; i<MAX_CONS; i++) {
 	    if (domain->con_active[i]
 		&& domain->con_up[i]
-		&& (domain->con_ipmb_addr[i] == ipmb->slave_addr)
+		&& (domain->con_ipmb_addr[i][ipmb->channel]==ipmb->slave_addr)
 		&& domain->sys_intf_mcs[i])
 	    {
 		si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -2102,7 +2113,7 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     }
     ipmb->slave_addr += 2;
     info->missed_responses = 0;
-    if (in_ipmb_ignores(domain, ipmb->slave_addr))
+    if (in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr))
 	goto next_addr_nolock;
 
  retry_addr:
@@ -2268,7 +2279,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     }
     ipmb->slave_addr += 2;
     info->missed_responses = 0;
-    if (in_ipmb_ignores(domain, ipmb->slave_addr))
+    if (in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr))
 	goto next_addr_nolock;
 
  retry_addr:
@@ -2338,7 +2349,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	goto out_err;
 
     /* Skip addresses we must ignore. */
-    while ((in_ipmb_ignores(domain, ipmb->slave_addr))
+    while ((in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr))
 	   && (ipmb->slave_addr <= end_addr))
     {
 	ipmb->slave_addr += 2;
@@ -2471,14 +2482,24 @@ start_mc_scan(ipmi_domain_t *domain)
     ipmi_lock(domain->mc_lock);
     if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain))) {
 	/* Always scan the local BMC(s). */
-	int i;
+	int i, j;
 	for (i=0; i<MAX_CONS; i++) {
 	    if (!domain->conn[i])
 		continue;
 	    _ipmi_get_domain_fully_up(domain);
-	    ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[i],
-				    domain->con_ipmb_addr[i], bmc_scan_done,
-				    NULL);
+	    for (j=0; j<MAX_IPMI_USED_CHANNELS; j++) {
+		if (domain->chan[j].medium != IPMI_CHANNEL_MEDIUM_IPMB)
+		    continue;
+		ipmi_start_ipmb_mc_scan(domain, j, domain->con_ipmb_addr[i][j],
+					domain->con_ipmb_addr[i][j],
+					bmc_scan_done, NULL);
+		break;
+	    }
+	    if (j == MAX_IPMI_USED_CHANNELS)
+		/* Didn't find a valid channel, just scan 0 to get one. */
+		ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[i][0],
+					domain->con_ipmb_addr[i][0],
+					bmc_scan_done, NULL);
 	}
 	ipmi_unlock(domain->mc_lock);
 	return;
@@ -2503,7 +2524,7 @@ start_mc_scan(ipmi_domain_t *domain)
 
     /* Now start the IPMB scans. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
-	if (domain->chan[i].medium == 1) { /* IPMB */
+	if (domain->chan[i].medium == IPMI_CHANNEL_MEDIUM_IPMB) {
 	    /* Always scan the normal BMC first, but don't report scan
 	       done on it. */
 	    _ipmi_get_domain_fully_up(domain);
@@ -3718,8 +3739,8 @@ con_up_complete(ipmi_domain_t *domain)
     if (i == MAX_IPMI_USED_CHANNELS) {
 	domain->chan[0].medium = 1;
 	/* If these fail it's really no big deal. */
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1e);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x22, 0xfe);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x00, 0x1e);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x22, 0xfe);
     }
 
     domain->connection_up = 1;
@@ -4067,12 +4088,13 @@ start_con_up(ipmi_domain_t *domain)
 static void start_activate_timer(ipmi_domain_t *domain);
 
 static void
-initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
-		     int          err,
-		     unsigned int ipmb,
-		     int          active,
-		     unsigned int hacks,
-		     void         *cb_data)
+initial_ipmb_addr_cb(ipmi_con_t    *ipmi,
+		     int           err,
+		     unsigned char ipmb_addr[],
+		     unsigned int  num_ipmb_addr,
+		     int           active,
+		     unsigned int  hacks,
+		     void          *cb_data)
 {
     ipmi_domain_t *domain = cb_data;
     int           u;
@@ -4106,12 +4128,13 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
     _ipmi_domain_put(domain);
 }
 
-static void ll_addr_changed(ipmi_con_t   *ipmi,
-			    int          err,
-			    unsigned int ipmb,
-			    int          active,
-			    unsigned int hacks,
-			    void         *cb_data);
+static void ll_addr_changed(ipmi_con_t    *ipmi,
+			    int           err,
+			    unsigned char ipmb_addr[],
+			    unsigned int  num_ipmb_addr,
+			    int           active,
+			    unsigned int  hacks,
+			    void          *cb_data);
 
 static void
 activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
@@ -4327,18 +4350,20 @@ start_activate_timer(ipmi_domain_t *domain)
 }
 
 static void
-ll_addr_changed(ipmi_con_t   *ipmi,
-		int          err,
-		unsigned int ipmb,
-		int          active,
-		unsigned int hacks,
-		void         *cb_data)
+ll_addr_changed(ipmi_con_t    *ipmi,
+		int           err,
+		unsigned char ipmb_addr[],
+		unsigned int  num_ipmb_addr,
+		int           active,
+		unsigned int  hacks,
+		void          *cb_data)
 {
     ipmi_domain_t *domain = cb_data;
     int           rv;
     int           u;
     int           start_connection;
-    unsigned char old_addr;
+    unsigned char old_addr[MAX_IPMI_USED_CHANNELS];
+    int           i;
 
     rv = _ipmi_domain_get(domain);
     if (rv)
@@ -4352,23 +4377,33 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     if (u == -1)
 	goto out_unlock;
 
-    old_addr = domain->con_ipmb_addr[u];
+    memcpy(old_addr, domain->con_ipmb_addr[u], sizeof(old_addr));
 
-    domain->con_ipmb_addr[u] = ipmb;
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	domain->con_ipmb_addr[u][i] = ipmb_addr[i];
+    }
 
     if (!domain->in_startup) {
 	/* Only scan the IPMBs if we are not in startup.  Otherwise things
 	   get reported before we are ready. */
-	if (ipmb != old_addr) {
-	    /* First scan the old address to remove it. */
-	    if (domain->con_ipmb_addr[u] != 0)
-		ipmi_start_ipmb_mc_scan(domain, 0, old_addr, old_addr,
-			       		NULL, NULL);
-	}
+	for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	    if (! ipmb_addr[i])
+		continue;
+	    if (ipmb_addr[i] != old_addr[i]) {
+		/* First scan the old address to remove it. */
+		if (domain->con_ipmb_addr[u] != 0)
+		    ipmi_start_ipmb_mc_scan(domain, i,
+					    old_addr[i], old_addr[i],
+					    NULL, NULL);
+	    }
 
-	/* Scan the new address.  Even though the address may not have
-	   changed, it may have changed modes and need to be rescanned. */
-	ipmi_start_ipmb_mc_scan(domain, 0, ipmb, ipmb, NULL, NULL);
+	    /* Scan the new address.  Even though the address may not have
+	       changed, it may have changed modes and need to be rescanned. */
+	    ipmi_start_ipmb_mc_scan(domain, i, ipmb_addr[i], ipmb_addr[i],
+				    NULL, NULL);
+	}
     }
 
     start_connection = (active && (first_active_con(domain) == -1));
