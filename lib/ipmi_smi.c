@@ -965,6 +965,7 @@ smi_register_for_events(ipmi_con_t                 *ipmi,
 	rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
 	if (rv == -1) {
 	    remove_event_handler(smi, entry);
+	    ipmi_mem_free(entry);
 	    rv = errno;
 	    goto out_unlock;
 	}
@@ -996,7 +997,7 @@ smi_deregister_for_events(ipmi_con_t                 *ipmi,
     ipmi_lock(smi->event_handlers_lock);
 
     remove_event_handler(smi, id);
-    id->ipmi = NULL;
+    ipmi_mem_free(id);
 
     if (smi->event_handlers == NULL) {
 	int val = 0;

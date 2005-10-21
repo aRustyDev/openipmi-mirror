@@ -1,3 +1,7 @@
+2005-10-21 Corey Minyard <cminyard@mvista.com>
+
+	* lib/smi.c: Fixed a memory leak with event handlers.
+
 2005-10-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Modify the ipmb-providing
