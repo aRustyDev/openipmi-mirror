@@ -1475,6 +1475,7 @@ ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
 			char            *value,
 			unsigned int    len)
 {
+    info->did_output = 1;
     info->cmdlang->out_binary(info->cmdlang, name, value, len);
 }
 
@@ -1484,6 +1485,7 @@ ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			 char            *value,
 			 unsigned int    len)
 {
+    info->did_output = 1;
     info->cmdlang->out_unicode(info->cmdlang, name, value, len);
 }
 
@@ -2525,6 +2527,7 @@ evinfo(ipmi_cmd_info_t *cmd_info)
     }
 
     ipmi_cmdlang_set_evinfo(do_evinfo);
+    ipmi_cmdlang_out(cmd_info, "event info set", NULL);
     return;
 
  out_err:
