@@ -365,7 +365,10 @@ int ipmi_fru_destroy(ipmi_fru_t            *fru,
 		     ipmi_fru_destroyed_cb handler,
 		     void                  *cb_data);
 
-/* Generic callback for iterating. */
+/* Generic callback for iterating.  This only applies to FRU data
+   objects that are created by the user.  Other FRUs (like ones
+   automatically fetched by entities or for other functions) do not
+   appear here. */
 typedef void (*ipmi_fru_ptr_cb)(ipmi_fru_t *fru,
 				void       *cb_data);
 void ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
