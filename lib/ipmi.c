@@ -1115,7 +1115,6 @@ ipmi_parse_args(int         *curr_arg,
 	if (len > 16)
 	    len = 16;
 	memcpy(p->username, args[*curr_arg], len);
-	p->username[16] = '\0';
 	p->username_len = len;
 	p->username_set = 1;
 	(*curr_arg)++; CHECK_ARG;
@@ -1196,10 +1195,8 @@ ipmi_parse_args(int         *curr_arg,
 	memset(p->username, 0, sizeof(p->username));
 	memset(p->password, 0, sizeof(p->password));
 	strncpy(p->username, args[*curr_arg], 16);
-	p->username[16] = '\0';
 	(*curr_arg)++; CHECK_ARG;
 	strncpy(p->password, args[*curr_arg], 16);
-	p->password[16] = '\0';
 	(*curr_arg)++; CHECK_ARG;
 
 	p->swid = strtoul(args[*curr_arg], NULL, 0);
@@ -1314,8 +1311,8 @@ ipmi_parse_args2(int         *curr_arg,
 		}
 	    } else if (strcmp(args[*curr_arg], "-p2") == 0) {
 		(*curr_arg)++; CHECK_ARG;
-		p->str_port[2] = ipmi_strdup(args[*curr_arg]);
-		if (p->str_port[2] == NULL) {
+		p->str_port[1] = ipmi_strdup(args[*curr_arg]);
+		if (p->str_port[1] == NULL) {
 		    rv = ENOMEM;
 		    goto out_err;
 		}

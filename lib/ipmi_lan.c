@@ -3115,7 +3115,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     if (username_len)
 	memcpy(lan->username, username, username_len);
     lan->username_len = username_len;
-    if (username_len)
+    if (password_len)
 	memcpy(lan->password, password, password_len);
     lan->password_len = password_len;
 
