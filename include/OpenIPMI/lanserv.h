@@ -116,7 +116,7 @@ typedef struct session_s
 {
     unsigned int active : 1;
 
-    int           idx; /* My idx in the table. */
+    int           handle; /* My index in the table. */
 
     unsigned char   authtype;
     ipmi_authdata_t authdata;
