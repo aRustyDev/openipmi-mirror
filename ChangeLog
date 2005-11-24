@@ -1,3 +1,14 @@
+2005-11-23 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Remove the check for the MC being active when
+	allowing the sensor to perform operations.  It's not always
+	accurate and shouldn't matter.
+
+	* swig/OpenIPMI.i: Fix some string handling errors.
+
+	* swig/OpenIPMI.i: Fix the threshold_reading_cb to pass the error
+	as a parameter
+
 2005-11-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: call _ipmi_mc_put() at the end of
