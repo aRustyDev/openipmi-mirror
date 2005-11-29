@@ -885,6 +885,17 @@ mc_active_handler(ipmi_mc_t  *mc,
 }
 
 static void
+mc_fully_up_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_fully_up_cb", "%p", &mc_ref);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+}
+
+static void
 mc_msg_cb(ipmi_mc_t  *mc,
 	  ipmi_msg_t *msg,
 	  void       *cb_data)
@@ -4644,6 +4655,25 @@ int pef_str_to_parm(char *str);
     int remove_active_handler(swig_cb handler)
     {
 	cb_rm(mc, active);
+    }
+
+    /*
+     * Add a handler to be called when an mc has reached fully up
+     * status.  When this happens the mc_fully_up_cb
+     * method on the first parameter will be called with the following
+     * parameters: <self> <mc>.
+     */
+    int add_fully_up_handler(swig_cb handler)
+    {
+	cb_add(mc, fully_up);
+    }
+
+    /*
+     * Remove the presence handler.
+     */
+    int remove_fully_up_handler(swig_cb handler)
+    {
+	cb_rm(mc, fully_up);
     }
 
     /*
