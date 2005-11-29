@@ -937,7 +937,9 @@ hot_swap_state_changed(ipmi_sensor_t         *sensor,
 				       finfo->hs_state,
 				       &event,
 				       &handled);
-    if (finfo->hs_state == IPMI_HOT_SWAP_NOT_PRESENT) {
+    if ((old_state == IPMI_HOT_SWAP_NOT_PRESENT) 
+	|| (finfo->hs_state == IPMI_HOT_SWAP_NOT_PRESENT))
+    {
 	/* The new state is not present, scan the mc to clear it out. */
 	unsigned char ipmb_addr = finfo->minfo->ipmb_address;
 	int           rv;
@@ -1388,12 +1390,12 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 	   function needed it).  The control didn't yet exist, so just
 	   free the memory. */
 	ipmi_mem_free(l);
-	return;
+	goto out;
     }
     l->op_in_progress = 0;
 
     if (check_for_msg_err(mc, NULL, msg, 5, "fru_led_cap_rsp"))
-	return;
+	goto out;
 
     finfo = l->fru;
 
@@ -1409,7 +1411,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		 "%soem_atca.c(fru_led_cap_rsp): "
 		 "Could not get entity: 0x%x",
 		 MC_NAME(mc), rv);
-	return;
+	goto out;
     }
 
     if (num == 0)
@@ -1433,7 +1435,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		 "Could not create LED control: 0x%x",
 		 MC_NAME(mc), rv);
 	_ipmi_entity_put(finfo->entity);
-	return;
+	goto out;
     }
     for (i=1; i<=6; i++) {
 	if (msg->data[2] & (1 << i))
@@ -1455,8 +1457,10 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		 "%soem_atca.c(fru_led_cap_rsp): "
 		 "Could not add LED control: 0x%x",
 		 MC_NAME(mc), rv);
-	return;
+	goto out;
     }
+ out:
+    return;
 }
 
 static void
@@ -1478,8 +1482,9 @@ get_led_capability_2(ipmi_mc_t  *mc,
 	return;
     }
 
-    if (check_for_msg_err(mc, NULL, rsp, 3, "get_led_capability_2"))
+    if (check_for_msg_err(mc, NULL, rsp, 3, "get_led_capability_2")) {
 	return;
+    }
 
     linfo->local_control = rsp->data[2] & 1;
 
@@ -1526,7 +1531,7 @@ get_led_capability(ipmi_mc_t *mc, atca_fru_t *finfo, unsigned int num)
     rv = ipmi_mc_send_command(mc, 0, &msg, get_led_capability_2, linfo);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(get_led_capabilities): "
+		 "%soem_atca.c(get_led_capability): "
 		 "Could not send FRU LED state command: 0x%x",
 		 MC_NAME(mc), rv);
 	/* Just go on, don't shut down the info. */
@@ -1543,7 +1548,7 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
     unsigned int num_leds;
 
     if (check_for_msg_err(mc, NULL, rsp, 4, "fru_led_prop_rsp"))
-	return;
+	goto out;
 
     /* Note that while the MC exists, finfo is guaranteed to exist
        because we never decrease the number of FRUs. */
@@ -1552,11 +1557,11 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 	/* There is a race here, it is possible to have two LED
 	   fetches running at the same time.  If they have already
 	   been fetched, just ignore this message. */
-	return;
+	goto out;
 
     if (!finfo->entity)
 	/* The entity was destroyed while the message was in progress. */
-	return;
+	goto out;
     
     num_leds = 4 + rsp->data[3];
     finfo->leds = ipmi_mem_alloc(sizeof(atca_led_t *) * num_leds);
@@ -1565,7 +1570,7 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 		 "%soem_atca.c(fru_led_prop_rsp): "
 		 "Could not allocate memory LEDs",
 		 MC_NAME(mc));
-	return;
+	goto out;
     }
     memset(finfo->leds, 0, sizeof(atca_led_t *) * num_leds);
     finfo->num_leds = num_leds;
@@ -1579,7 +1584,7 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 			 "%soem_atca.c(fru_led_prop_rsp): "
 			 "Could not allocate memory for an LED",
 			 MC_NAME(mc));
-		return;
+		goto out;
 	    }
 	    memset(finfo->leds[i], 0, sizeof(atca_led_t));
 	    get_led_capability(mc, finfo, i);
@@ -1597,11 +1602,13 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 		     "%soem_atca.c(fru_led_prop_rsp): "
 		     "Could not allocate memory for an aux LED",
 		     MC_NAME(mc));
-	    return;
+	    goto out;
 	}
 	memset(finfo->leds[i], 0, sizeof(atca_led_t));
 	get_led_capability(mc, finfo, i);
     }
+ out:
+    return;
 }
 
 static void
