@@ -20,6 +20,9 @@
 	* glib/glib_os_hnd.c: Clear the running flag when timer is
 	stopped.
 
+	* cmdlang/cmd_domain.c: Remove the code and requirement for
+	including internal/ipmi_event.h
+
 2005-11-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Make sure the main entities I create hang around
