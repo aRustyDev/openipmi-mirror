@@ -17,6 +17,9 @@
 	newly present (as well as when it goes away, which was already
 	there).
 
+	* glib/glib_os_hnd.c: Clear the running flag when timer is
+	stopped.
+
 2005-11-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Make sure the main entities I create hang around
