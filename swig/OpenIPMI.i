@@ -1136,11 +1136,11 @@ threshold_str(char *s, enum ipmi_thresh_e thresh)
 	*s = 'u'; s++; *s = 'c'; s++;
     } else if (thresh == IPMI_UPPER_NON_RECOVERABLE) {
 	*s = 'u'; s++; *s = 'r'; s++;
-    } else if (thresh == IPMI_UPPER_NON_CRITICAL) {
+    } else if (thresh == IPMI_LOWER_NON_CRITICAL) {
 	*s = 'l'; s++; *s = 'n'; s++;
-    } else if (thresh == IPMI_UPPER_CRITICAL) {
+    } else if (thresh == IPMI_LOWER_CRITICAL) {
 	*s = 'l'; s++; *s = 'c'; s++;
-    } else if (thresh == IPMI_UPPER_NON_RECOVERABLE) {
+    } else if (thresh == IPMI_LOWER_NON_RECOVERABLE) {
 	*s = 'l'; s++; *s = 'r'; s++;
     }
     return s;
@@ -1597,13 +1597,12 @@ thresholds_to_str(ipmi_thresholds_t *t)
 	 thresh++)
     {
 	if (ipmi_threshold_get(t, thresh, &val) == 0)
-	    len += snprintf(dummy, 1, "aa %f:", val);
+	    len += snprintf(dummy, 1, "aa %f:", val) + 1;
     }
 
     str = malloc(len+1);
     s = str;
     
-    len = 0;
     for (thresh = IPMI_LOWER_NON_CRITICAL;
 	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
 	 thresh++)
@@ -1612,6 +1611,7 @@ thresholds_to_str(ipmi_thresholds_t *t)
 	    continue;
 
 	threshold_str(dummy, thresh);
+	dummy[2] = '\0';
 
 	s += sprintf(s, "%s %f:", dummy, val);
 	*s = ' ';
@@ -1621,7 +1621,7 @@ thresholds_to_str(ipmi_thresholds_t *t)
 
     len = s - str;
     if (len > 0)
-	str[len-1] = '\0'; /* Remove the final : */
+	str[len-2] = '\0'; /* Remove the final ': ' */
 
     return str;
 }
