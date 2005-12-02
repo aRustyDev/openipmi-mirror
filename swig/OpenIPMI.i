@@ -2917,18 +2917,13 @@ int pef_str_to_parm(char *str);
      * will be called on the first parameter with the following parameters:
      * <self> <domain>
      */
-    char *convert_to_domain(swig_cb handler)
+    int to_domain(swig_cb handler)
     {
-	int rv;
-
 	if (! valid_swig_cb(handler))
-	    return NULL;
+	    return EINVAL;
 
-	rv = ipmi_domain_pointer_cb(*self, handle_domain_cb,
-				    get_swig_cb(handler));
-	if (rv)
-	    return strerror(rv);
-	return NULL;
+	return ipmi_domain_pointer_cb(*self, handle_domain_cb,
+				      get_swig_cb(handler));
     }
 }
 
@@ -3523,18 +3518,13 @@ int pef_str_to_parm(char *str);
      * will be called on the first parameter with the following parameters:
      * <self> <entity>
      */
-    char *convert_to_entity(swig_cb handler)
+    int to_entity(swig_cb handler)
     {
-	int rv;
-
 	if (! valid_swig_cb(handler))
-	    return NULL;
+	    return EINVAL;
 
-	rv = ipmi_entity_pointer_cb(*self, handle_entity_cb,
-				    get_swig_cb(handler));
-	if (rv)
-	    return strerror(rv);
-	return NULL;
+	return ipmi_entity_pointer_cb(*self, handle_entity_cb,
+				      get_swig_cb(handler));
     }
 }
 
@@ -4375,18 +4365,13 @@ int pef_str_to_parm(char *str);
      * will be called on the first parameter with the following parameters:
      * <self> <mc>
      */
-    char *convert_to_mc(swig_cb handler)
+    int to_mc(swig_cb handler)
     {
-	int rv;
-
 	if (! valid_swig_cb(handler))
-	    return NULL;
+	    return EINVAL;
 
-	rv = ipmi_mc_pointer_cb(*self, handle_mc_cb,
-				get_swig_cb(handler));
-	if (rv)
-	    return strerror(rv);
-	return NULL;
+	return ipmi_mc_pointer_cb(*self, handle_mc_cb,
+				  get_swig_cb(handler));
     }
 }
 
@@ -5649,18 +5634,13 @@ int pef_str_to_parm(char *str);
      * will be called on the first parameter with the following parameters:
      * <self> <sensor>
      */
-    char *convert_to_sensor(swig_cb handler)
+    int to_sensor(swig_cb handler)
     {
-	int rv;
-
 	if (! valid_swig_cb(handler))
-	    return NULL;
+	    return EINVAL;
 
-	rv = ipmi_sensor_pointer_cb(*self, handle_sensor_cb,
-				    get_swig_cb(handler));
-	if (rv)
-	    return strerror(rv);
-	return NULL;
+	return ipmi_sensor_pointer_cb(*self, handle_sensor_cb,
+				      get_swig_cb(handler));
     }
 }
 
@@ -6764,18 +6744,13 @@ int pef_str_to_parm(char *str);
      * will be called on the first parameter with the following parameters:
      * <self> <control>
      */
-    char *convert_to_control(swig_cb handler)
+    int to_control(swig_cb handler)
     {
-	int rv;
-
 	if (! valid_swig_cb(handler))
-	    return NULL;
+	    return EINVAL;
 
-	rv = ipmi_control_pointer_cb(*self, handle_control_cb,
-				    get_swig_cb(handler));
-	if (rv)
-	    return strerror(rv);
-	return NULL;
+	return ipmi_control_pointer_cb(*self, handle_control_cb,
+				       get_swig_cb(handler));
     }
 }
 
