@@ -12,6 +12,11 @@
 
 	* swig/OpenIPMI.i: Fixed problems dealing with threshold strings.
 
+	* swig/OpenIPMI.i: Have the discrete event handle call the proper
+	callback.
+
+	* swig/OpenIPMI.i: Add an event delete capability.
+
 2005-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Got something wrong in the new MC state machine.  Need

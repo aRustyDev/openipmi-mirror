@@ -1186,6 +1186,7 @@ threshold_event_str(char                        *s,
     } else {
 	*s = 'd'; s++;
     }
+    *s = '\0';
     return s;
 }
 
@@ -1249,13 +1250,13 @@ discrete_event_str(char                   *s,
 	offset = 99;
     if (offset < 0)
 	offset = 0;
-    sprintf(s, "%d", offset);
-    s += 2;
+    s += sprintf(s, "%d", offset);
     if (dir == IPMI_ASSERTION) {
 	*s = 'a'; s++;
     } else {
 	*s = 'd'; s++;
     }
+    *s = '\0';
     return s;
 }
 
@@ -1372,6 +1373,7 @@ str_to_threshold_event_state(char               *str,
 	rv = next_parm(str, &start, &next);
     }
 
+    *events = e;
     return 0;
 
  out_err:
@@ -1739,7 +1741,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     discrete_event_str(eventstr, offset, dir);
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
 				       "OpenIPMI::ipmi_event_t");
-    swig_call_cb(cb, "threshold_event_cb", "%p%s%d%d%p", &sensor_ref,
+    swig_call_cb(cb, "discrete_event_cb", "%p%s%d%d%p", &sensor_ref,
 		 eventstr, severity, prev_severity, &event_ref);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
     swig_free_ref(event_ref);
@@ -2400,6 +2402,19 @@ get_pet(ipmi_pet_t *pet, int err, void *cb_data)
 	deref_swig_cb_val(cb);
     }
     swig_free_ref(pet_ref);
+}
+
+static void
+event_deleted_handler(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    domain_ref;
+
+    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    swig_call_cb(cb, "event_delete_cb", "%p%d", &domain_ref, err);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 %}
@@ -3808,6 +3823,14 @@ int pef_str_to_parm(char *str);
     int get_entity_id()
     {
 	return ipmi_entity_get_entity_id(self);
+    }
+
+    /*
+     * Get the string representation of the entity id
+     */
+    const char *get_entity_id_string()
+    {
+	return ipmi_entity_get_entity_id_string(self);
     }
 
     /*
@@ -5993,7 +6016,7 @@ int pef_str_to_parm(char *str);
     int set_thresholds(char    *thresholds,
 		       swig_cb handler = NULL)
     {
-	ipmi_thresholds_t   *th;
+	ipmi_thresholds_t   *th = NULL;
 	int                 rv;
 	swig_cb_val         handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
@@ -6935,9 +6958,9 @@ int pef_str_to_parm(char *str);
      */
     int get_val(swig_cb handler)
     {
-	swig_cb_val        handler_val = NULL;
+	swig_cb_val         handler_val = NULL;
 	ipmi_control_val_cb done = NULL;
-	int                rv;
+	int                 rv;
 
 	if (valid_swig_cb(handler)) {
 	    handler_val = ref_swig_cb(handler);
@@ -7743,6 +7766,26 @@ int pef_str_to_parm(char *str);
     {
 	ipmi_event_free(self);
     }
+
+    /* When you are done with an event, you should delete it.  This
+       removes the event from the local event queue and removes it
+       from the external system event log. */
+    int delete(swig_cb handler)
+    {
+	swig_cb_val    handler_val = NULL;
+	ipmi_domain_cb done = NULL;
+	int            rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = event_deleted_handler;
+	}
+	rv = ipmi_event_delete(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
 
     %newobject get_mc_id;
     /*
