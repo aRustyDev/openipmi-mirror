@@ -10,6 +10,8 @@
 
 	* swig/perl/*: Adjusted for the previous change.
 
+	* swig/OpenIPMI.i: Fixed problems dealing with threshold strings.
+
 2005-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Got something wrong in the new MC state machine.  Need

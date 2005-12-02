@@ -1628,6 +1628,7 @@ thresholds_to_str(ipmi_thresholds_t *t)
 
 static int
 str_to_thresholds(char              *str,
+		  ipmi_sensor_t     *sensor,
 		  ipmi_thresholds_t **thresholds)
 {
     enum ipmi_thresh_e thresh;
@@ -1635,6 +1636,7 @@ str_to_thresholds(char              *str,
     int                start, next;
     int                rv;
     double             val;
+    int                err = EINVAL;
 
     t = malloc(ipmi_thresholds_size());
     ipmi_thresholds_init(t);
@@ -1662,13 +1664,18 @@ str_to_thresholds(char              *str,
 	    thresh = IPMI_LOWER_NON_RECOVERABLE;
 	else
 	    goto out_err;
-	    
+
 	val = strtod(s+3, &endstr);
-	if (*endstr != ':')
+	if ((*endstr != ':') && (*endstr != '\0'))
 	    goto out_err;
 
+	rv = ipmi_threshold_set(t, sensor, thresh, val);
+	if (rv) {
+	    err = rv;
+	    goto out_err;
+	}
 	start = next;
-	rv = next_parm(str, &start, &next);
+	rv = next_colon_parm(str, &start, &next);
     }
 
     *thresholds = t;
@@ -1676,7 +1683,7 @@ str_to_thresholds(char              *str,
 
  out_err:
     free(t);
-    return EINVAL;
+    return err;
 }
 
 static int
@@ -5991,7 +5998,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val         handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 
-	rv = str_to_thresholds(thresholds, &th);
+	rv = str_to_thresholds(thresholds, self, &th);
 	if (rv)
 	    return rv;
 
