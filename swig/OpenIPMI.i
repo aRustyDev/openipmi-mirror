@@ -4207,7 +4207,7 @@ int pef_str_to_parm(char *str);
 
     /*
      * Get the current hot-swap activation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_get_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
     int get_auto_activate_time(swig_cb handler)
@@ -4230,7 +4230,7 @@ int pef_str_to_parm(char *str);
 
     /*
      * Set the current hot-swap activation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_set_time_cb handler will be called with the
      * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_activate_time(ipmi_timeout_t auto_act,
@@ -4253,7 +4253,7 @@ int pef_str_to_parm(char *str);
 
     /*
      * Get the current hot-swap deactivation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_get_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
     int get_auto_deactivate_time(swig_cb handler)
@@ -4276,7 +4276,7 @@ int pef_str_to_parm(char *str);
 
     /*
      * Set the current hot-swap deactivation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_set_time_cb handler will be called with the
      * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_deactivate_time(ipmi_timeout_t auto_act,
@@ -4730,8 +4730,8 @@ int pef_str_to_parm(char *str);
 	return rv;
     }
 
-#define IPMI_MC_RESET_COLD 1
-#define IPMI_MC_RESET_WARM 2
+#define MC_RESET_COLD 1
+#define MC_RESET_WARM 2
     /*
      * Reset the MC, either a cold or warm reset depending on the
      * first parm.  Note that the effects of a reset are not defined
@@ -6236,99 +6236,99 @@ int pef_str_to_parm(char *str);
 	return ipmi_sensor_get_base_unit_string(self);
     }
 
-#define IPMI_UNIT_TYPE_UNSPECIFIED		0
-#define IPMI_UNIT_TYPE_DEGREES_C		1
-#define IPMI_UNIT_TYPE_DEGREES_F		2
-#define IPMI_UNIT_TYPE_DEGREES_K		3
-#define IPMI_UNIT_TYPE_VOLTS			4
-#define IPMI_UNIT_TYPE_AMPS			5
-#define IPMI_UNIT_TYPE_WATTS			6
-#define IPMI_UNIT_TYPE_JOULES			7
-#define IPMI_UNIT_TYPE_COULOMBS			8
-#define IPMI_UNIT_TYPE_VA			9
-#define IPMI_UNIT_TYPE_NITS			10
-#define IPMI_UNIT_TYPE_LUMENS			11
-#define IPMI_UNIT_TYPE_LUX			12
-#define IPMI_UNIT_TYPE_CANDELA			13
-#define IPMI_UNIT_TYPE_KPA			14
-#define IPMI_UNIT_TYPE_PSI			15
-#define IPMI_UNIT_TYPE_NEWTONS			16
-#define IPMI_UNIT_TYPE_CFM			17
-#define IPMI_UNIT_TYPE_RPM			18
-#define IPMI_UNIT_TYPE_HZ			19
-#define IPMI_UNIT_TYPE_USECONDS			20
-#define IPMI_UNIT_TYPE_MSECONDS			21
-#define IPMI_UNIT_TYPE_SECONDS			22
-#define IPMI_UNIT_TYPE_MINUTE			23
-#define IPMI_UNIT_TYPE_HOUR			24
-#define IPMI_UNIT_TYPE_DAY			25
-#define IPMI_UNIT_TYPE_WEEK			26
-#define IPMI_UNIT_TYPE_MIL			27
-#define IPMI_UNIT_TYPE_INCHES			28
-#define IPMI_UNIT_TYPE_FEET			29
-#define IPMI_UNIT_TYPE_CUBIC_INCHS		30
-#define IPMI_UNIT_TYPE_CUBIC_FEET		31
-#define IPMI_UNIT_TYPE_MILLIMETERS		32
-#define IPMI_UNIT_TYPE_CENTIMETERS		33
-#define IPMI_UNIT_TYPE_METERS			34
-#define IPMI_UNIT_TYPE_CUBIC_CENTIMETERS	35
-#define IPMI_UNIT_TYPE_CUBIC_METERS		36
-#define IPMI_UNIT_TYPE_LITERS			37
-#define IPMI_UNIT_TYPE_FL_OZ			38
-#define IPMI_UNIT_TYPE_RADIANS			39
-#define IPMI_UNIT_TYPE_SERADIANS		40
-#define IPMI_UNIT_TYPE_REVOLUTIONS		41
-#define IPMI_UNIT_TYPE_CYCLES			42
-#define IPMI_UNIT_TYPE_GRAVITIES		43
-#define IPMI_UNIT_TYPE_OUNCES			44
-#define IPMI_UNIT_TYPE_POUNDS			45
-#define IPMI_UNIT_TYPE_FOOT_POUNDS		46
-#define IPMI_UNIT_TYPE_OUNCE_INCHES		47
-#define IPMI_UNIT_TYPE_GAUSS			48
-#define IPMI_UNIT_TYPE_GILBERTS			49
-#define IPMI_UNIT_TYPE_HENRIES			50
-#define IPMI_UNIT_TYPE_MHENRIES			51
-#define IPMI_UNIT_TYPE_FARADS			52
-#define IPMI_UNIT_TYPE_UFARADS			53
-#define IPMI_UNIT_TYPE_OHMS			54
-#define IPMI_UNIT_TYPE_SIEMENS			55
-#define IPMI_UNIT_TYPE_MOLES			56
-#define IPMI_UNIT_TYPE_BECQUERELS		57
-#define IPMI_UNIT_TYPE_PPM			58
-#define IPMI_UNIT_TYPE_reserved1		59
-#define IPMI_UNIT_TYPE_DECIBELS			60
-#define IPMI_UNIT_TYPE_DbA			61
-#define IPMI_UNIT_TYPE_DbC			62
-#define IPMI_UNIT_TYPE_GRAYS			63
-#define IPMI_UNIT_TYPE_SIEVERTS			64
-#define IPMI_UNIT_TYPE_COLOR_TEMP_DEG_K		65
-#define IPMI_UNIT_TYPE_BITS			66
-#define IPMI_UNIT_TYPE_KBITS			67
-#define IPMI_UNIT_TYPE_MBITS			68
-#define IPMI_UNIT_TYPE_GBITS			69
-#define IPMI_UNIT_TYPE_BYTES			70
-#define IPMI_UNIT_TYPE_KBYTES			71
-#define IPMI_UNIT_TYPE_MBYTES			72
-#define IPMI_UNIT_TYPE_GBYTES			73
-#define IPMI_UNIT_TYPE_WORDS			74
-#define IPMI_UNIT_TYPE_DWORDS			75
-#define IPMI_UNIT_TYPE_QWORDS			76
-#define IPMI_UNIT_TYPE_LINES			77
-#define IPMI_UNIT_TYPE_HITS			78
-#define IPMI_UNIT_TYPE_MISSES			79
-#define IPMI_UNIT_TYPE_RETRIES			80
-#define IPMI_UNIT_TYPE_RESETS			81
-#define IPMI_UNIT_TYPE_OVERRUNS			82
-#define IPMI_UNIT_TYPE_UNDERRUNS		83
-#define IPMI_UNIT_TYPE_COLLISIONS		84
-#define IPMI_UNIT_TYPE_PACKETS			85
-#define IPMI_UNIT_TYPE_MESSAGES			86
-#define IPMI_UNIT_TYPE_CHARACTERS		87
-#define IPMI_UNIT_TYPE_ERRORS			88
-#define IPMI_UNIT_TYPE_CORRECTABLE_ERRORS	89	
-#define IPMI_UNIT_TYPE_UNCORRECTABLE_ERRORS	90
-#define IPMI_UNIT_TYPE_FATAL_ERRORS		91
-#define IPMI_UNIT_TYPE_GRAMS			92
+#define UNIT_TYPE_UNSPECIFIED		0
+#define UNIT_TYPE_DEGREES_C		1
+#define UNIT_TYPE_DEGREES_F		2
+#define UNIT_TYPE_DEGREES_K		3
+#define UNIT_TYPE_VOLTS			4
+#define UNIT_TYPE_AMPS			5
+#define UNIT_TYPE_WATTS			6
+#define UNIT_TYPE_JOULES			7
+#define UNIT_TYPE_COULOMBS			8
+#define UNIT_TYPE_VA			9
+#define UNIT_TYPE_NITS			10
+#define UNIT_TYPE_LUMENS			11
+#define UNIT_TYPE_LUX			12
+#define UNIT_TYPE_CANDELA			13
+#define UNIT_TYPE_KPA			14
+#define UNIT_TYPE_PSI			15
+#define UNIT_TYPE_NEWTONS			16
+#define UNIT_TYPE_CFM			17
+#define UNIT_TYPE_RPM			18
+#define UNIT_TYPE_HZ			19
+#define UNIT_TYPE_USECONDS			20
+#define UNIT_TYPE_MSECONDS			21
+#define UNIT_TYPE_SECONDS			22
+#define UNIT_TYPE_MINUTE			23
+#define UNIT_TYPE_HOUR			24
+#define UNIT_TYPE_DAY			25
+#define UNIT_TYPE_WEEK			26
+#define UNIT_TYPE_MIL			27
+#define UNIT_TYPE_INCHES			28
+#define UNIT_TYPE_FEET			29
+#define UNIT_TYPE_CUBIC_INCHS		30
+#define UNIT_TYPE_CUBIC_FEET		31
+#define UNIT_TYPE_MILLIMETERS		32
+#define UNIT_TYPE_CENTIMETERS		33
+#define UNIT_TYPE_METERS			34
+#define UNIT_TYPE_CUBIC_CENTIMETERS	35
+#define UNIT_TYPE_CUBIC_METERS		36
+#define UNIT_TYPE_LITERS			37
+#define UNIT_TYPE_FL_OZ			38
+#define UNIT_TYPE_RADIANS			39
+#define UNIT_TYPE_SERADIANS		40
+#define UNIT_TYPE_REVOLUTIONS		41
+#define UNIT_TYPE_CYCLES			42
+#define UNIT_TYPE_GRAVITIES		43
+#define UNIT_TYPE_OUNCES			44
+#define UNIT_TYPE_POUNDS			45
+#define UNIT_TYPE_FOOT_POUNDS		46
+#define UNIT_TYPE_OUNCE_INCHES		47
+#define UNIT_TYPE_GAUSS			48
+#define UNIT_TYPE_GILBERTS			49
+#define UNIT_TYPE_HENRIES			50
+#define UNIT_TYPE_MHENRIES			51
+#define UNIT_TYPE_FARADS			52
+#define UNIT_TYPE_UFARADS			53
+#define UNIT_TYPE_OHMS			54
+#define UNIT_TYPE_SIEMENS			55
+#define UNIT_TYPE_MOLES			56
+#define UNIT_TYPE_BECQUERELS		57
+#define UNIT_TYPE_PPM			58
+#define UNIT_TYPE_reserved1		59
+#define UNIT_TYPE_DECIBELS			60
+#define UNIT_TYPE_DbA			61
+#define UNIT_TYPE_DbC			62
+#define UNIT_TYPE_GRAYS			63
+#define UNIT_TYPE_SIEVERTS			64
+#define UNIT_TYPE_COLOR_TEMP_DEG_K		65
+#define UNIT_TYPE_BITS			66
+#define UNIT_TYPE_KBITS			67
+#define UNIT_TYPE_MBITS			68
+#define UNIT_TYPE_GBITS			69
+#define UNIT_TYPE_BYTES			70
+#define UNIT_TYPE_KBYTES			71
+#define UNIT_TYPE_MBYTES			72
+#define UNIT_TYPE_GBYTES			73
+#define UNIT_TYPE_WORDS			74
+#define UNIT_TYPE_DWORDS			75
+#define UNIT_TYPE_QWORDS			76
+#define UNIT_TYPE_LINES			77
+#define UNIT_TYPE_HITS			78
+#define UNIT_TYPE_MISSES			79
+#define UNIT_TYPE_RETRIES			80
+#define UNIT_TYPE_RESETS			81
+#define UNIT_TYPE_OVERRUNS			82
+#define UNIT_TYPE_UNDERRUNS		83
+#define UNIT_TYPE_COLLISIONS		84
+#define UNIT_TYPE_PACKETS			85
+#define UNIT_TYPE_MESSAGES			86
+#define UNIT_TYPE_CHARACTERS		87
+#define UNIT_TYPE_ERRORS			88
+#define UNIT_TYPE_CORRECTABLE_ERRORS	89	
+#define UNIT_TYPE_UNCORRECTABLE_ERRORS	90
+#define UNIT_TYPE_FATAL_ERRORS		91
+#define UNIT_TYPE_GRAMS			92
 
     /*
      * Get the sensor's base unit.
