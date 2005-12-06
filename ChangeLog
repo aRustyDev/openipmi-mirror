@@ -1,3 +1,7 @@
+2005-12-06 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 1.4.22
+
 2005-12-05 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Renamed some misnamed constants, they are not
