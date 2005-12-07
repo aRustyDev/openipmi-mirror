@@ -4793,6 +4793,11 @@ int pef_str_to_parm(char *str);
 	return rv;
     }
 
+    /*
+     * Find out of the event log is enabled.  The
+     * mc_get_event_log_enable_cb will be called on the supplied
+     * handler with the following parms: <self> <mc> <err> <val>
+     */
     int get_event_log_enable(swig_cb handler)
     {
 	swig_cb_val handler_val;
@@ -4810,7 +4815,12 @@ int pef_str_to_parm(char *str);
 	return rv;
     }
 
-    int get_event_log_enable(int val, swig_cb handler = NULL)
+    /*
+     * Set the MC's event log enable.  The mc_set_event_log_enable_cb
+     * will be called on the supplied handler with the following
+     * parms: <self> <mc> <err>
+     */
+    int set_event_log_enable(int val, swig_cb handler = NULL)
     {
 	swig_cb_val     handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
