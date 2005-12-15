@@ -258,6 +258,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmdlang->errstr = "Unable to setup connection";
 	    cmdlang->err = rv;
+	    for (j=0; j<i; j++)
+		con[j]->close_connection(con[j]);
 	    for (j=0; j<set; j++)
 		ipmi_free_args(con_parms[j]);
 	    goto out;
