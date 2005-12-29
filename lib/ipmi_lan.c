@@ -1528,10 +1528,26 @@ data_handler(int            fd,
 		    goto out;
 	    }
 	} else {
+	    ipmi_msg_t *orig_msg;
+
 	    if (data_len < 15)
 		/* The response to a send message was not carrying the
 		   payload. */
 		goto out;
+
+	    orig_msg = &(lan->seq_table[seq].msg);
+	    if ((orig_msg->cmd == IPMI_SEND_MSG_CMD)
+		&& (orig_msg->netfn == IPMI_APP_NETFN))
+	    {
+		/* Boy, I hate IPMI message routing.  If the original
+		   command from the user was a send message, then
+		   assume this was the response the user was looking
+		   for.  This means that you can't route send message
+		   responses through a connection that supports
+		   returning the message data in the send message
+		   response, but that's wrong, anyway. */
+		goto handle_normal_msg;
+	    }
 
 	    if (tmsg[10] == lan->slave_addr[chan]) {
 		ipmi_system_interface_addr_t *si_addr
@@ -1557,104 +1573,110 @@ data_handler(int            fd,
 	    msg.data = tmsg+13;
 	    msg.data_len = data_len - 15;
 	}
-    } else if ((tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD)
-	       && ((tmsg[1] >> 2) == (IPMI_APP_NETFN | 1)))
-    {
-	/* It is an event from the event buffer. */
-	ipmi_system_interface_addr_t *si_addr
-	    = (ipmi_system_interface_addr_t *) &addr;
-
-	if (tmsg[6] != 0) {
-	    /* An error getting the events, just ignore it. */
-	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
-	    goto out;
-	}
-
-	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si_addr->channel = 0xf;
-	si_addr->lun = tmsg[4] & 3;
-
-	msg.netfn = tmsg[1] >> 2;
-	msg.cmd = tmsg[5];
-	addr_len = sizeof(ipmi_system_interface_addr_t);
-	msg.data = tmsg+6;
-	msg.data_len = data_len - 6;
-        if (DEBUG_MSG) {
-	    char buf1[32], buf2[32], buf3[32];
-	    ipmi_log(IPMI_LOG_DEBUG_START, "incoming async event\n addr =");
-	    dump_hex((unsigned char *) &ipaddrd, from_len);
-            ipmi_log(IPMI_LOG_DEBUG_CONT,
-		     "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		     ipmi_get_netfn_string(msg.netfn, buf1, 32),
-		     ipmi_get_command_string(msg.netfn, msg.cmd, buf2, 32),
-		     msg.data_len,
-		     ipmi_get_cc_string(msg.data[0], buf3, 32));
-	    if (msg.data_len) {
-		ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
-			 msg.data_len);
-		dump_hex(msg.data, msg.data_len);
-	    }
-	    ipmi_log(IPMI_LOG_DEBUG_END, " ");
-        }
-	handle_async_event(ipmi, &addr, addr_len, &msg);
-	goto out;
-    } else if ((addr3->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	       && (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-		    && (tmsg[3] == 0x20))
-		   || ((! (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		       && (tmsg[3] == lan->slave_addr[chan]))))
-    {
-        /* In some cases, a message from the IPMB looks like it came
-	   from the BMC itself, IMHO a misinterpretation of the
-	   errata.  IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
-	   didn't clear things up at all.  Some manufacturers have
-	   interpreted it this way, but IMHO it is incorrect. */
-        memcpy(&addr, &lan->seq_table[seq].addr, lan->seq_table[seq].addr_len);
-        addr_len = lan->seq_table[seq].addr_len;
-	if (addr.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
-	    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-        msg.netfn = tmsg[1] >> 2;
-        msg.cmd = tmsg[5];
-        msg.data = tmsg+6;
-        msg.data_len = data_len - 7;
     } else {
-	/* It's not encapsulated in a send message response. */
-
-	if (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-	     && (tmsg[3] == 0x20))
-	    || ((!(lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		&& (tmsg[3] == lan->slave_addr[chan])))
+    handle_normal_msg:
+	if ((tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD)
+	    && ((tmsg[1] >> 2) == (IPMI_APP_NETFN | 1)))
 	{
+	    /* It is an event from the event buffer. */
 	    ipmi_system_interface_addr_t *si_addr
 		= (ipmi_system_interface_addr_t *) &addr;
 
-	    /* It's directly from the BMC, so it's a system interface
-	       message. */
+	    if (tmsg[6] != 0) {
+		/* An error getting the events, just ignore it. */
+		if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+		    ipmi_log(IPMI_LOG_DEBUG,
+			     "Dropped message err getting event");
+		goto out;
+	    }
+
 	    si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	    si_addr->channel = 0xf;
 	    si_addr->lun = tmsg[4] & 3;
+
+	    msg.netfn = tmsg[1] >> 2;
+	    msg.cmd = tmsg[5];
+	    addr_len = sizeof(ipmi_system_interface_addr_t);
+	    msg.data = tmsg+6;
+	    msg.data_len = data_len - 6;
+	    if (DEBUG_MSG) {
+		char buf1[32], buf2[32], buf3[32];
+		ipmi_log(IPMI_LOG_DEBUG_START,
+			 "incoming async event\n addr =");
+		dump_hex((unsigned char *) &ipaddrd, from_len);
+		ipmi_log(IPMI_LOG_DEBUG_CONT,
+			 "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
+			 ipmi_get_netfn_string(msg.netfn, buf1, 32),
+			 ipmi_get_command_string(msg.netfn, msg.cmd, buf2, 32),
+			 msg.data_len,
+			 ipmi_get_cc_string(msg.data[0], buf3, 32));
+		if (msg.data_len) {
+		    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
+			     msg.data_len);
+		    dump_hex(msg.data, msg.data_len);
+		}
+		ipmi_log(IPMI_LOG_DEBUG_END, " ");
+	    }
+	    handle_async_event(ipmi, &addr, addr_len, &msg);
+	    goto out;
+	} else if ((addr3->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+		   && (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+			&& (tmsg[3] == 0x20))
+		       || ((! (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
+			   && (tmsg[3] == lan->slave_addr[chan]))))
+	{
+	    /* In some cases, a message from the IPMB looks like it came
+	       from the BMC itself, IMHO a misinterpretation of the
+	       errata.  IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
+	       didn't clear things up at all.  Some manufacturers have
+	       interpreted it this way, but IMHO it is incorrect. */
+	    memcpy(&addr, &lan->seq_table[seq].addr,
+		   lan->seq_table[seq].addr_len);
+	    addr_len = lan->seq_table[seq].addr_len;
+	    if (addr.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+		addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+	    msg.netfn = tmsg[1] >> 2;
+	    msg.cmd = tmsg[5];
+	    msg.data = tmsg+6;
+	    msg.data_len = data_len - 7;
 	} else {
-	    ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) &addr;
-	    ipmi_ipmb_addr_t *ipmb2
-		= (ipmi_ipmb_addr_t *) &lan->seq_table[seq].addr;
+	    /* It's not encapsulated in a send message response. */
 
-	    /* A message from the IPMB. */
-	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-	    /* This is a hack, but the channel does not come back in the
-	       message.  So we use the channel from the original
-	       instead. */
-	    ipmb_addr->channel = ipmb2->channel;
-	    ipmb_addr->slave_addr = tmsg[3];
-	    ipmb_addr->lun = tmsg[4] & 0x3;
+	    if (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+		 && (tmsg[3] == 0x20))
+		|| ((!(lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
+		    && (tmsg[3] == lan->slave_addr[chan])))
+	    {
+		ipmi_system_interface_addr_t *si_addr
+		    = (ipmi_system_interface_addr_t *) &addr;
+
+		/* It's directly from the BMC, so it's a system interface
+		   message. */
+		si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+		si_addr->channel = 0xf;
+		si_addr->lun = tmsg[4] & 3;
+	    } else {
+		ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) &addr;
+		ipmi_ipmb_addr_t *ipmb2
+		    = (ipmi_ipmb_addr_t *) &lan->seq_table[seq].addr;
+
+		/* A message from the IPMB. */
+		ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
+		/* This is a hack, but the channel does not come back in the
+		   message.  So we use the channel from the original
+		   instead. */
+		ipmb_addr->channel = ipmb2->channel;
+		ipmb_addr->slave_addr = tmsg[3];
+		ipmb_addr->lun = tmsg[4] & 0x3;
+	    }
+
+	    msg.netfn = tmsg[1] >> 2;
+	    msg.cmd = tmsg[5];
+	    addr_len = sizeof(ipmi_system_interface_addr_t);
+	    msg.data = tmsg+6;
+	    msg.data_len = data_len - 6;
+	    msg.data_len--; /* Remove the checksum */
 	}
-
-	msg.netfn = tmsg[1] >> 2;
-	msg.cmd = tmsg[5];
-	addr_len = sizeof(ipmi_system_interface_addr_t);
-	msg.data = tmsg+6;
-	msg.data_len = data_len - 6;
-	msg.data_len--; /* Remove the checksum */
     }
     
     ipmi_lock(lan->seq_num_lock);
