@@ -259,6 +259,7 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
 	    goto out;
 	}
 	len -= rv;
+	data += rv;
     }
 
     rv = 0;
