@@ -1094,7 +1094,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
 	info_ref[i] = swig_make_ref_destruct(user, "OpenIPMI::ipmi_user_t");
     }
     swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%*o", &mc_ref, err,
-		 count, &info_ref);
+		 count, info_ref);
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
     for (i=0; i<count; i++)
 	swig_free_ref(info_ref[i]);
@@ -5162,7 +5162,7 @@ int pef_str_to_parm(char *str);
      * Get the user info for a channel on the MC.  The first parameter
      * is the channel.  The second is the user number; if a valid user
      * number is passed in, then that user is the only one fetched.
-     * If -1 is passed for the user number, then all users are
+     * If 0 is passed for the user number, then all users are
      * fetched.  The third is the handler object, the
      * mc_channel_got_users_cb method will be called on it with the
      * following parameters: <self> <mc> <err> <user1> [<user2> ...]

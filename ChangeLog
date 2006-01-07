@@ -1,3 +1,11 @@
+2006-01-06 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Fix a comment, change the users callback
+	and object list reference to pass the proper value.
+	* swig/perl/OpenIPMI_perl.c: Adjust for the previous change.
+
+	* lib/mc.c: Allow a NULL callback in ipmi_mc_channel_set_access().
+	
 2006-01-05 Corey Minyard <cminyard@mvista.com>
 	
 	* unix/posix_thread_os_hnd.c, unix/posix_os_hnd.c: Fix the
