@@ -4527,7 +4527,8 @@ ipmi_user_free(ipmi_user_t *user)
 static void
 set_user_done(ipmi_mc_t *mc, int err, ipmi_user_t *user)
 {
-    user->handler(mc, err, user->cb_data);
+    if (user->handler)
+	user->handler(mc, err, user->cb_data);
     ipmi_user_free(user);
 }
 

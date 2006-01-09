@@ -1,3 +1,7 @@
+2006-01-08 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Allow a null handler for ipmi_mc_set_user().
+	
 2006-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix a comment, change the users callback
