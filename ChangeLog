@@ -1,3 +1,8 @@
+2006-01-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc: Fixed a memory leak that occurred in certain situations
+	when a shutdown occurs during startup.
+
 2006-01-08 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Allow a null handler for ipmi_mc_set_user().
