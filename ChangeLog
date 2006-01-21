@@ -1,3 +1,8 @@
+2006-01-20 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Fixed a shutdown problem if a shutdown occurred
+	during a bus scan that detected an MC.
+
 2006-01-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc: Fixed a memory leak that occurred in certain situations
