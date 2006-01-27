@@ -1,3 +1,10 @@
+2006-01-27 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, lib/entity.c: Fixed a bug handling problems if the
+	connection went away at just the wrong time or if the device ID
+	response was not valid.  The domain could get stuck and leak some
+	memory in these cases.
+
 2006-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed a shutdown problem if a shutdown occurred
