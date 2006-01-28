@@ -8,6 +8,10 @@
 	* lib/ipmi_lan.c: The OEM finished callback could return a NULL
 	connection if shutdown was occurring, handle that.
 
+	* cmdlang/Makefile.am: Don't link os_debug.c in with the command
+	language library, that has bad side effects.  Just link it with
+	ipmish.
+
 2006-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed a shutdown problem if a shutdown occurred
