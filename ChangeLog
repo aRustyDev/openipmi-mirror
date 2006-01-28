@@ -5,6 +5,9 @@
 	response was not valid.  The domain could get stuck and leak some
 	memory in these cases.
 
+	* lib/ipmi_lan.c: The OEM finished callback could return a NULL
+	connection if shutdown was occurring, handle that.
+
 2006-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed a shutdown problem if a shutdown occurred
