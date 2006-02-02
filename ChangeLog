@@ -1,3 +1,7 @@
+2006-02-01 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 1.4.24
+
 2006-01-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, lib/entity.c: Fixed a bug handling problems if the
