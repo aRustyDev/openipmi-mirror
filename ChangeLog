@@ -1,3 +1,9 @@
+2006-02-06 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Fixed bugs in lanparm and pef config and parm
+	set handling, they were referencing a possibly uninitialized
+	variable.
+
 2006-02-01 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.4.24

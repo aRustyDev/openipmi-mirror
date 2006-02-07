@@ -2229,8 +2229,8 @@ lanparm_set_parm(ipmi_lanparm_t *lanparm,
 	swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(lanparm_ref);
     }
-    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2267,8 +2267,8 @@ lanparm_set_config(ipmi_lanparm_t    *lanparm,
 	swig_call_cb(cb, "lanparm_set_config_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(lanparm_ref);
     }
-    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2285,8 +2285,8 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
 	swig_call_cb(cb, "lanparm_clear_lock_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(lanparm_ref);
     }
-    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2333,8 +2333,8 @@ pef_set_parm(ipmi_pef_t *pef,
 	swig_call_cb(cb, "pef_set_parm_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(pef_ref);
     }
-    swig_free_ref(pef_ref);
 }
 
 static void
@@ -2370,8 +2370,8 @@ pef_set_config(ipmi_pef_t    *pef,
 	swig_call_cb(cb, "pef_set_config_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(pef_ref);
     }
-    swig_free_ref(pef_ref);
 }
 
 static void
@@ -2387,8 +2387,8 @@ pef_clear_lock(ipmi_pef_t    *pef,
 	swig_call_cb(cb, "pef_clear_lock_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(pef_ref);
     }
-    swig_free_ref(pef_ref);
 }
 
 static void
