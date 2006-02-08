@@ -1,3 +1,8 @@
+2006-02-07 Corey Minyard <cminyard@mvista.com>
+
+	* lib/pef.c: Return EAGAIN if the lock could not be claimed on the
+	PEF config fetch.
+
 2006-02-06 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fixed bugs in lanparm and pef config and parm
