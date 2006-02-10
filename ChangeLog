@@ -1,3 +1,7 @@
+2006-02-10 Corey Minyard <cminyard@mvista.com>
+
+	* lib/lanparm.c: Fixed a data overrun in ipmi_lanparm_set_config.
+
 2006-02-08 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_bits.h:
