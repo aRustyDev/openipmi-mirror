@@ -901,7 +901,11 @@ static int gba(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	opt = ((unsigned char *) lanc) + lp->optional_offset;
 
     if (err) {
-	if (opt && (err == IPMI_IPMI_ERR_VAL(0x80))) {
+	if (opt
+	    && ((err == IPMI_IPMI_ERR_VAL(0x80))
+		/* Some systems incorrectly return 0xcc.  Sigh. */
+		|| (err == IPMI_IPMI_ERR_VAL(0xcc))))
+	{
 	    *opt = 0;
 	    return 0;
 	}
@@ -985,7 +989,11 @@ static int ghp(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	opt = ((unsigned char *) lanc) + lp->optional_offset;
 
     if (err) {
-	if (opt && (err == IPMI_IPMI_ERR_VAL(0x80))) {
+	if (opt
+	    && ((err == IPMI_IPMI_ERR_VAL(0x80))
+		/* Some systems incorrectly return 0xcc.  Sigh. */
+		|| (err == IPMI_IPMI_ERR_VAL(0xcc))))
+	{
 	    *opt = 0;
 	    return 0;
 	}
@@ -1021,7 +1029,12 @@ static int gga(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	opt = ((unsigned char *) lanc) + lp->optional_offset;
 
     if (err) {
-	if (opt && (err == IPMI_IPMI_ERR_VAL(0x80))) {
+	if (opt
+	    && ((err == IPMI_IPMI_ERR_VAL(0x80))
+		/* Some systems incorrectly return 0xcc.  Sigh. */
+		|| (err == IPMI_IPMI_ERR_VAL(0xcc))))
+
+	{
 	    *opt = 0;
 	    return 0;
 	}
