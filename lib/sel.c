@@ -566,8 +566,9 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    fetch_complete(sel, EAGAIN, 1);
 	    goto out;
 	} else {
+	    sel_unlock(sel);
 	    start_fetch(elem, 0);
-	    goto out_unlock;
+	    goto out;
 	}
     }
     if (rsp->data[0] != 0) {
@@ -663,12 +664,14 @@ handle_sel_data(ipmi_mc_t  *mc,
 
 	/* To avoid confusion, deliver the event before we deliver fetch
            complete. */
-	if (event_is_new)
-	    if (sel->new_event_handler)
-		sel->new_event_handler(sel,
-				       mc,
-				       del_event,
-				       sel->new_event_cb_data);
+	if (event_is_new && sel->new_event_handler) {
+	    ipmi_sel_new_event_handler_cb handler = sel->new_event_handler;
+	    void                          *cb_data = sel->new_event_cb_data;
+	    sel_unlock(sel);
+	    handler(sel, mc, del_event, cb_data);
+	    sel_lock(sel);
+	}
+
 	/* If the operation completed successfully and everything in
 	   our SEL is deleted, then clear it with our old reservation.
 	   We also do the clear if the overflow flag is set; on some
@@ -711,9 +714,13 @@ handle_sel_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    if (event_is_new)
-	if (sel->new_event_handler)
-	    sel->new_event_handler(sel, mc, del_event, sel->new_event_cb_data);
+    if (event_is_new && sel->new_event_handler) {
+	ipmi_sel_new_event_handler_cb handler = sel->new_event_handler;
+	void                          *cb_data = sel->new_event_cb_data;
+	sel_unlock(sel);
+	handler(sel, mc, del_event, cb_data);
+	sel_lock(sel);
+    }
  out_unlock:
     sel_unlock(sel);
  out:
@@ -2228,8 +2235,10 @@ ipmi_sel_set_new_event_handler(ipmi_sel_info_t               *sel,
 			       ipmi_sel_new_event_handler_cb handler,
 			       void                          *cb_data)
 {
+    sel_lock(sel);
     sel->new_event_handler = handler;
     sel->new_event_cb_data = cb_data;
+    sel_unlock(sel);
     return 0;
 }
 

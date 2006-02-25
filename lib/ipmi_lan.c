@@ -870,7 +870,8 @@ rsp_timeout_handler(void              *cb_data,
     int                   seq;
     ipmi_ll_rsp_handler_t handler;
     ipmi_msgi_t           *rspi;
-    int                   ip_num;
+    int                   ip_num = 0;
+    int                   call_lost_con = 0;
 
     if (!lan_valid_ipmi(ipmi)) {
 	return;
@@ -883,14 +884,17 @@ rsp_timeout_handler(void              *cb_data,
 
     /* If we were cancelled, just free the data and ignore it. */
     if (info->cancelled) {
+	ipmi_unlock(lan->seq_num_lock);
 	goto out;
     }
 
     if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
 
-    if (! lan->seq_table[seq].inuse)
+    if (! lan->seq_table[seq].inuse) {
+	ipmi_unlock(lan->seq_num_lock);
 	goto out;
+    }
 
     if (DEBUG_RAWMSG) {
 	ip_num = lan->seq_table[seq].last_ip_num;
@@ -933,7 +937,8 @@ rsp_timeout_handler(void              *cb_data,
 		    gettimeofday(&now, NULL);
 		    if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
 		    {
-			lost_connection(lan, ip_num);
+			/* Can't report yet, still holding locks. */
+			call_lost_con = 1;
 		    }
 		} else {
 		    ipmi_unlock(lan->ip_lock);
@@ -986,6 +991,8 @@ rsp_timeout_handler(void              *cb_data,
 	    rspi->data[0] = IPMI_UNKNOWN_ERR_CC;
 	} else {
 	    ipmi_unlock(lan->seq_num_lock);
+	    if (call_lost_con)
+		lost_connection(lan, ip_num);
 	    lan_put(ipmi);
 	    return;
 	}
@@ -1015,6 +1022,9 @@ rsp_timeout_handler(void              *cb_data,
     /* Convert broadcasts back into normal sends. */
     if (rspi->addr.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
 	rspi->addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+
+    if (call_lost_con)
+	lost_connection(lan, ip_num);
 
     ipmi_handle_rsp_item(ipmi, rspi, handler);
 
@@ -1238,6 +1248,8 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 			     &(q_item->msg), q_item->rsp_handler,
 			     q_item->rsp_item);
 	if (rv) {
+	    ipmi_unlock(lan->seq_num_lock);
+
 	    /* Send an error response to the user. */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sipmi_lan.c(check_command_queue): "
@@ -1251,6 +1263,7 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	    ipmi_handle_rsp_item_copyall(ipmi, q_item->rsp_item,
 					 &q_item->addr, q_item->addr_len,
 					 &q_item->msg, q_item->rsp_handler);
+	    ipmi_lock(lan->seq_num_lock);
 	} else {
 	    /* We successfully sent a message, break out of the loop. */
 	    started = 1;
@@ -2027,6 +2040,14 @@ lan_deregister_for_command(ipmi_con_t    *ipmi,
 			   unsigned char cmd)
 {
     return ENOSYS;
+}
+
+static unsigned int
+lan_get_num_ports(ipmi_con_t *ipmi)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    return lan->num_ip_addr;
 }
 
 static void *
@@ -3158,6 +3179,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->deregister_for_command = lan_deregister_for_command;
     ipmi->close_connection = lan_close_connection;
     ipmi->close_connection_done = lan_close_connection_done;
+    ipmi->get_num_ports = lan_get_num_ports;
 
     /* Add the waiter last. */
     rv = handlers->add_fd_to_wait_for(handlers,

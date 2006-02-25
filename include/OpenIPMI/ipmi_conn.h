@@ -273,6 +273,10 @@ struct ipmi_con_s
 				 ipmi_ll_con_closed_cb handler,
 				 void                  *cb_data);
 
+    /* Returns the number of ports on the connection (one more than
+       the max_port that can be reported by ipmi_ll_con_changed_cb().
+       If NULL, assume 1. */
+    unsigned int (*get_num_ports)(ipmi_con_t *ipmi);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")
