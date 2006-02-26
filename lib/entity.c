@@ -148,7 +148,7 @@ struct ipmi_entity_s
     dlr_ref_t key;
 
     /* Lock used for protecting misc data. */
-    ipmi_lock_t *lock;
+    ipmi_lock_t *elock;
 
     int usecount;
 
@@ -298,6 +298,9 @@ struct ipmi_entity_info_s
     ipmi_domain_id_t      domain_id;
     locked_list_t         *entities;
 };
+
+#define ent_lock(e) ipmi_lock(e->elock)
+#define ent_unlock(e) ipmi_unlock(e->elock)
 
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
 static void call_presence_handlers(ipmi_entity_t *ent, int present);
@@ -541,7 +544,7 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     locked_list_destroy(ent->control_handlers);
     locked_list_destroy(ent->sensor_handlers);
 
-    ipmi_destroy_lock(ent->lock);
+    ipmi_destroy_lock(ent->elock);
 
     ipmi_mem_free(ent);
 
@@ -652,7 +655,7 @@ entity_set_name(ipmi_entity_t *entity)
 {
     int length = sizeof(entity->name);
 
-    ipmi_lock(entity->lock);
+    ent_lock(entity);
     length = ipmi_domain_get_name(entity->domain, entity->name, length);
     entity->name[length] = '(';
     length++;
@@ -674,7 +677,7 @@ entity_set_name(ipmi_entity_t *entity)
     length++;
     entity->name[length] = '\0';
     length++;
-    ipmi_unlock(entity->lock);
+    ent_unlock(entity);
 }
 
 char *
@@ -834,18 +837,18 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 int
 _ipmi_entity_add_ref(ipmi_entity_t *ent)
 {
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     ent->ref_count++;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return 0;
 }
 
 int
 _ipmi_entity_remove_ref(ipmi_entity_t *ent)
 {
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     ent->ref_count--;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return 0;
 }
 
@@ -1042,7 +1045,7 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ent->control_handlers)
 	goto out_err;
 
-    rv = ipmi_create_lock(ent->domain, &ent->lock);
+    rv = ipmi_create_lock(ent->domain, &ent->elock);
     if (rv)
 	goto out_err;
 
@@ -1095,8 +1098,8 @@ entity_add(ipmi_entity_info_t *ents,
 	entity_destroy_timer(ent->hot_swap_act_info);
     if (ent->hot_swap_deact_info)
 	entity_destroy_timer(ent->hot_swap_deact_info);
-    if (ent->lock)
-	ipmi_destroy_lock(ent->lock);
+    if (ent->elock)
+	ipmi_destroy_lock(ent->elock);
     if (ent->presence_handlers)
 	locked_list_destroy(ent->presence_handlers);
     if (ent->waitq)
@@ -1385,14 +1388,14 @@ call_presence_handlers(ipmi_entity_t *ent, int present)
 
     info.ent = ent;
     info.present = present;
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->cruft_presence_handler) {
 	ipmi_entity_presence_nd_cb handler = ent->cruft_presence_handler;
 	void                       *cb_data = ent->cruft_presence_cb_data;
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
 	handler(ent, info.present, cb_data, NULL);
     } else
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
     locked_list_iterate(ent->presence_handlers, call_presence_handler,
 			&info);
 }
@@ -1986,7 +1989,9 @@ states_read(ipmi_sensor_t *sensor,
     int           rv;
 
     if (err) {
+	_ipmi_entity_get(ent);
 	detect_no_presence_sensor_presence(ent);
+	_ipmi_entity_put(ent);
 	return;
     }
 
@@ -2012,7 +2017,9 @@ states_bit_read(ipmi_sensor_t *sensor,
     ipmi_entity_t *ent = cb_data;
 
     if (err) {
+	_ipmi_entity_get(ent);
 	detect_no_presence_sensor_presence(ent);
+	_ipmi_entity_put(ent);
 	return;
     }
 
@@ -2028,27 +2035,36 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
     ent_detect_info_t   *info = cb_data;
     int                 rv;
 
-    if ((!info->force) && (! ent->presence_possibly_changed))
+    ent_lock(ent);
+    if ((!info->force) && (! ent->presence_possibly_changed)) {
+	ent_unlock(ent);
 	return;
+    }
     ent->presence_possibly_changed = 0;
 
-    if (ent->hot_swappable)
+    if (ent->hot_swappable) {
+	ent_unlock(ent);
 	ipmi_entity_check_hot_swap_state(ent);
+	ent_lock(ent);
+    }
 
     _ipmi_get_domain_fully_up(ent->domain, "ent_detect_presence");
     if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
-	rv = ipmi_sensor_id_get_states(ent->presence_sensor_id,
-		       		       states_read, ent);
+	ipmi_sensor_id_t psi = ent->presence_sensor_id;
+	ent_unlock(ent);
+	rv = ipmi_sensor_id_get_states(psi, states_read, ent);
 	if (rv)
 	    _ipmi_put_domain_fully_up(ent->domain, "ent_detect_presence(2)");
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but a presence sensor. */
-	rv = ipmi_sensor_id_get_states(ent->presence_bit_sensor_id,
-		       		       states_bit_read, ent);
+	ipmi_sensor_id_t psi = ent->presence_bit_sensor_id;
+	ent_unlock(ent);
+	rv = ipmi_sensor_id_get_states(psi, states_bit_read, ent);
 	if (rv)
 	    _ipmi_put_domain_fully_up(ent->domain, "ent_detect_presence(3)");
     } else {
+	ent_unlock(ent);
 	detect_no_presence_sensor_presence(ent);
     }
 }
@@ -2098,6 +2114,7 @@ entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data)
     _ipmi_entity_put(ent);
 }
 
+/* Must be called with the entity lock held.  May release and reclaim it. */
 static void
 handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 {
@@ -2107,13 +2124,14 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     int                val;
 
     ent->presence_sensor_id = ipmi_sensor_convert_to_id(sensor);
+    ent->presence_sensor = sensor;
 
     /* If we have a presence sensor, remove the presence bit sensor. */
     if (ent->presence_bit_sensor) {
+	ent->presence_bit_sensor = NULL;
 	ipmi_sensor_remove_discrete_event_handler(ent->presence_bit_sensor,
 						  presence_sensor_changed,
 						  ent);
-	ent->presence_bit_sensor = NULL;
     }
 
     event_support = ipmi_sensor_get_event_support(sensor);
@@ -2152,7 +2170,9 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 	    ipmi_discrete_event_set(&events, 1, IPMI_DEASSERTION);
     }
 
+    ent_unlock(ent);
     ipmi_sensor_set_event_enables(sensor, &events, NULL, NULL);
+    ent_lock(ent);
 
  out:
     ent->presence_possibly_changed = 1;
@@ -2165,12 +2185,16 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     }
 }
 
+/* Must be called with the entity lock held.  May release and reclaim it. */
 static void
-handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
+handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor,
+			       int bit)
 {
     ipmi_event_state_t events;
     int                event_support;
 
+    ent->presence_bit_sensor = sensor;
+    ent->presence_bit_offset = bit;
     ent->presence_bit_sensor_id = ipmi_sensor_convert_to_id(sensor);
 
     event_support = ipmi_sensor_get_event_support(sensor);
@@ -2205,7 +2229,9 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 				    IPMI_DEASSERTION);
     }
 
+    ent_unlock(ent);
     ipmi_sensor_enable_events(sensor, &events, NULL, NULL);
+    ent_lock(ent);
 
  out:
     ent->presence_possibly_changed = 1;
@@ -2480,26 +2506,25 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
+    ent_lock(ent);
     if (is_presence_sensor(sensor) && (ent->presence_sensor == NULL)
 	&& (ent->presence_bit_sensor == NULL))
     {
 	/* It's the presence sensor and we don't already have one.  We
 	   keep this special. */
-	ent->presence_sensor = sensor;
 	handle_new_presence_sensor(ent, sensor);
     } else if ((ent->presence_sensor == NULL)
 	       && (ent->presence_bit_sensor == NULL)
 	       && is_presence_bit_sensor(sensor, &bit))
     {
 	/* If it's a sensor with a presence bit, we use it. */
-	ent->presence_bit_sensor = sensor;
-	ent->presence_bit_offset = bit;
-	handle_new_presence_bit_sensor(ent, sensor);
+	handle_new_presence_bit_sensor(ent, sensor, bit);
     }
 
     if (is_hot_swap_requester(sensor) && (ent->hot_swap_requester == NULL)) {
 	handle_new_hot_swap_requester(ent, sensor);
     }
+    ent_unlock(ent);
 
     locked_list_add_entry(ent->sensors, sensor, NULL, link);
 	
@@ -2529,7 +2554,6 @@ sens_cmp_if_presence(ipmi_entity_t *ent, ipmi_sensor_t *sensor,
     info->is_presence = is_presence_sensor(sensor);
     if (info->is_presence) {
 	info->sensor = sensor;
-	ent->presence_sensor = sensor;
 	handle_new_presence_sensor(ent, sensor);
     }
 }
@@ -2549,12 +2573,11 @@ sens_cmp_if_presence_bit(ipmi_entity_t *ent, ipmi_sensor_t *sensor,
     info->is_presence = is_presence_bit_sensor(sensor, &info->bit);
     if (info->is_presence) {
 	info->sensor = sensor;
-	ent->presence_bit_sensor = sensor;
-	ent->presence_bit_offset = info->bit;
-	handle_new_presence_bit_sensor(ent, sensor);
+	handle_new_presence_bit_sensor(ent, sensor, info->bit);
     }
 }
 
+/* Must be called with the entity lock held.  May release and reclaim it. */
 static void
 check_for_another_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *old)
 {
@@ -2586,6 +2609,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
+    ent_lock(ent);
     if (sensor == ent->presence_sensor) {
 	ent->presence_sensor = NULL;
 	ent->presence_possibly_changed = 1;
@@ -2598,6 +2622,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
     if (sensor == ent->hot_swap_requester) {
 	ent->hot_swap_requester = NULL;
     }
+    ent_unlock(ent);
 
     if (! locked_list_remove(ent->sensors, sensor, NULL)) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -2616,10 +2641,12 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
+    ent_lock(ent);
     if (is_hot_swap_power(control))
 	handle_new_hot_swap_power(ent, control);
     if (is_hot_swap_indicator(control))
 	handle_new_hot_swap_indicator(ent, control);
+    ent_unlock(ent);
 
     locked_list_add_entry(ent->controls, control, NULL, link);
     ent->presence_possibly_changed = 1;
@@ -2635,6 +2662,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
+    ent_lock(ent);
     if (control == ent->hot_swap_power) {
 	/* If don't have power control, we can't manage hot-swap. */
 	ipmi_entity_set_supports_managed_hot_swap(ent, 0);
@@ -2643,6 +2671,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     }
     if (control == ent->hot_swap_indicator)
 	ent->hot_swap_indicator = NULL;
+    ent_unlock(ent);
 
     if (! locked_list_remove(ent->controls, control, NULL)) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -4198,12 +4227,12 @@ ipmi_entity_get_is_fru(ipmi_entity_t *ent)
     int rv = 0;
     CHECK_ENTITY_LOCK(ent);
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->info.type == IPMI_ENTITY_FRU)
 	rv = 1;
     if ((ent->info.type == IPMI_ENTITY_MC) && (ent->info.FRU_inventory_device))
 	rv = 1;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return rv;
 }
 
@@ -4353,7 +4382,7 @@ ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length)
 
     CHECK_ENTITY_LOCK(ent);
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->info.id_len > length)
 	clen = length;
     else
@@ -4367,7 +4396,7 @@ ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length)
 
 	id[clen] = '\0';
     }
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     return clen;
 }
@@ -4381,11 +4410,11 @@ ipmi_entity_set_id(ipmi_entity_t *ent, char *id,
     if (length > ENTITY_ID_LEN)
 	length = ENTITY_ID_LEN;
     
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     memcpy(ent->info.id, id, length);
     ent->info.id_type = type;
     ent->info.id_len = length;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     entity_set_name(ent);
 }
 
@@ -5573,9 +5602,9 @@ hot_swap_power_on(ipmi_control_t *control, int err, void *cb_data)
 		 " Unable to set the hot swap power: %x",
 		 CONTROL_NAME(control), err);
     } else {
-	ipmi_lock(ent->lock);
+	ent_lock(ent);
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
     }
 }
 
@@ -5590,9 +5619,9 @@ hot_swap_power_off(ipmi_control_t *control, int err, void *cb_data)
 		 " Unable to set the hot swap power: %x",
 		 CONTROL_NAME(control), err);
     } else {
-	ipmi_lock(ent->lock);
+	ent_lock(ent);
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
     }
 }
 
@@ -5615,9 +5644,9 @@ hot_swap_power_on_cb(ipmi_control_t *control, int err, void *cb_data)
 		 " Unable to set the hot swap power: %x",
 		 CONTROL_NAME(control), err);
     } else {
-	ipmi_lock(ent->lock);
+	ent_lock(ent);
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
     }
 
     if (info->handler)
@@ -5637,9 +5666,9 @@ hot_swap_power_off_cb(ipmi_control_t *control, int err, void *cb_data)
 		 " Unable to set the hot swap power: %x",
 		 CONTROL_NAME(control), err);
     } else {
-	ipmi_lock(ent->lock);
+	ent_lock(ent);
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
     }
 
     if (info->handler)
@@ -5665,7 +5694,7 @@ hot_swap_act(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
     ipmi_control_op_cb cb;
     power_cb_info_t    *info = NULL;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->hot_swap_state == IPMI_HOT_SWAP_ACTIVATION_REQUESTED) {
 	if (ent->hot_swap_power) {
 	    if (handler == NULL) {
@@ -5685,10 +5714,12 @@ hot_swap_act(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
 	    }
 
 	    val = 1;
+	    ent_unlock(ent);
 	    rv = ipmi_control_id_set_val(ent->hot_swap_power_id,
 				         &val,
 				         cb,
 				         cb_data);
+	    ent_lock(ent);
 	    if (!rv)
 		set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS,
 				   NULL);
@@ -5699,7 +5730,7 @@ hot_swap_act(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
 	rv = EAGAIN;
     }
  out:
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     return rv;
 }
@@ -5745,7 +5776,7 @@ hot_swap_deact(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
     ipmi_control_op_cb cb;
     power_cb_info_t    *info;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->hot_swap_state == IPMI_HOT_SWAP_DEACTIVATION_REQUESTED) {
 	if (ent->hot_swap_power) {
 	    if (handler == NULL) {
@@ -5765,10 +5796,12 @@ hot_swap_deact(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
 	    }
 
 	    val = 0;
+	    ent_unlock(ent);
 	    rv = ipmi_control_id_set_val(ent->hot_swap_power_id,
 				         &val,
 				         cb,
 				         cb_data);
+	    ent_lock(ent);
 	    if (!rv)
 		set_hot_swap_state(ent, IPMI_HOT_SWAP_DEACTIVATION_IN_PROGRESS,
 				   NULL);
@@ -5777,7 +5810,7 @@ hot_swap_deact(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
 	rv = EAGAIN;
     }
  out:
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     return rv;
 }
@@ -5876,10 +5909,10 @@ set_hot_swap_state(ipmi_entity_t             *ent,
 
     if (old_state != state) {
 	ent->hot_swap_state = state;
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
 	ipmi_entity_call_hot_swap_handlers(ent, old_state, state, &event,
 					   &handled);
-	ipmi_lock(ent->lock);
+	ent_lock(ent);
     }
 
     return handled;
@@ -5897,7 +5930,7 @@ hot_swap_requester_changed(ipmi_sensor_t         *sensor,
     ipmi_entity_t *ent = cb_data;
     int           handled = IPMI_EVENT_NOT_HANDLED;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (offset != ent->hot_swap_offset)
 	goto out;
 
@@ -5954,7 +5987,7 @@ hot_swap_requester_changed(ipmi_sensor_t         *sensor,
     }
 
  out:
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return handled;
 }
 
@@ -5993,7 +6026,6 @@ handle_new_hot_swap_indicator(ipmi_entity_t *ent, ipmi_control_t *control)
 				       &ent->hot_swap_ind_req_deact,
 				       &ent->hot_swap_ind_inact);
 
-    ipmi_lock(ent->lock);
     ent->hot_swap_indicator_id = ipmi_control_convert_to_id(control);
     ent->hot_swap_indicator = control;
     switch (ent->hot_swap_state)
@@ -6020,9 +6052,10 @@ handle_new_hot_swap_indicator(ipmi_entity_t *ent, ipmi_control_t *control)
 	val = ent->hot_swap_ind_inact;
 	break;
     }
-    ipmi_unlock(ent->lock);
 	
+    ent_unlock(ent);
     rv = ipmi_control_set_val(control, &val, NULL, NULL);
+    ent_lock(ent);
     if (rv)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sentity.c(handle_new_hot_swap_indicator): Unable to"
@@ -6046,7 +6079,7 @@ requester_checked(ipmi_sensor_t *sensor,
 	return;
     }
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ipmi_is_state_set(states, ent->hot_swap_offset)
 	== ent->hot_swap_requesting_val)
     {
@@ -6059,7 +6092,7 @@ requester_checked(ipmi_sensor_t *sensor,
 	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
 			       NULL);
     }
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 }
 
 static void
@@ -6079,24 +6112,24 @@ power_checked(ipmi_control_t *control,
 	return;
     }
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (val[0])
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
     else
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
 
     if (ent->hot_swap_requester) {
-	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
-			               requester_checked,
-			               ent);
+	ipmi_sensor_id_t hsr = ent->hot_swap_requester_id;
+	ent_unlock(ent);
+	rv = ipmi_sensor_id_get_states(hsr, requester_checked, ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sentity.c(power_checked): Unable to"
 		     " request requester status, error %x",
 		     SENSOR_NAME(ent->hot_swap_requester), rv);
 	}
-    }
-    ipmi_unlock(ent->lock);
+    } else
+	ent_unlock(ent);
 }
 
 static void
@@ -6104,7 +6137,6 @@ handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
 {
     int rv;
   
-    ipmi_lock(ent->lock);
     /* Add our own event handler. */
     rv = ipmi_control_add_val_event_handler(control,
 					    hot_swap_power_changed,
@@ -6124,7 +6156,9 @@ handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
     ipmi_entity_set_supports_managed_hot_swap(ent, 1);
 
     if (ent->hot_swappable) {
+	ent_unlock(ent);
 	rv = ipmi_control_get_val(control, power_checked, ent);
+	ent_lock(ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sentity.c(handle_new_hot_swap_power): Unable to"
@@ -6133,9 +6167,10 @@ handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
 	}
     }
  out:
-    ipmi_unlock(ent->lock);
+    return;
 }
 
+/* Must be called with the entity lock held.  May release and reclaim it. */
 static void
 handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 {
@@ -6144,7 +6179,6 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     int                rv;
     int                val;
 
-    ipmi_lock(ent->lock);
     ent->hot_swap_requester_id = ipmi_sensor_convert_to_id(sensor);
 
     ipmi_sensor_is_hot_swap_requester(sensor,
@@ -6196,12 +6230,15 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 				    IPMI_DEASSERTION);
     }
 
+    ent_unlock(ent);
     ipmi_sensor_set_event_enables(sensor, &events, NULL, NULL);
+    ent_lock(ent);
 
     if (ent->hot_swappable) {
-	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
-			               requester_checked,
-			               ent);
+	ipmi_sensor_id_t hsr = ent->hot_swap_requester_id;
+	ent_unlock(ent);
+	rv = ipmi_sensor_id_get_states(hsr, requester_checked, ent);
+	ent_lock(ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sentity.c(handle_new_hot_swap_requester): Unable to"
@@ -6211,7 +6248,6 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     }
 
  out:
-    ipmi_unlock(ent->lock);
     return;
 }
 
@@ -6223,7 +6259,7 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
     int handled = IPMI_EVENT_NOT_HANDLED;
     int rv;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (present) {
 	if ((!ent->hot_swap_power)
 	    || (hot_swap_act_timeout == IPMI_TIMEOUT_NOW))
@@ -6231,9 +6267,11 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
 	    /* No power control or immediate timeout, it goes straight
 	       to active. */
 	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, event);
+	    ent_unlock(ent);
 	} else {
-	    rv = ipmi_control_id_get_val(ent->hot_swap_power_id, power_checked,
-				         ent);
+	    ipmi_control_id_t hsp = ent->hot_swap_power_id;
+	    ent_unlock(ent);
+	    rv = ipmi_control_id_get_val(hsp, power_checked, ent);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_SEVERE,
 			 "%sentity.c(handle_hot_swap_presence): Unable to"
@@ -6243,8 +6281,8 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
 	}
     } else {
 	handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_NOT_PRESENT, event);
+	ent_unlock(ent);
     }
-    ipmi_unlock(ent->lock);
 
     return handled;
 }
@@ -6267,12 +6305,12 @@ e_set_auto_activate(ipmi_entity_t  *ent,
 {
     int rv = 0;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (!ent->hot_swap_power)
 	rv = ENOSYS;
     else
 	ent->hot_swap_act_timeout = auto_act;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     if ((!rv) && (done))
 	done(ent, 0, cb_data);
@@ -6288,12 +6326,12 @@ e_get_auto_activate(ipmi_entity_t       *ent,
     int            rv = 0;
     ipmi_timeout_t time = 0;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (!ent->hot_swap_power)
 	rv = ENOSYS;
     else
 	time = ent->hot_swap_act_timeout;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     if ((!rv) && (handler))
 	handler(ent, 0, time, cb_data);
@@ -6309,12 +6347,12 @@ e_set_auto_deactivate(ipmi_entity_t  *ent,
 {
     int rv = 0;
     
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (!ent->hot_swap_power)
 	rv = ENOSYS;
     else
 	ent->hot_swap_deact_timeout = auto_act;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     if ((!rv) && (done))
 	done(ent, 0, cb_data);
@@ -6330,12 +6368,12 @@ e_get_auto_deactivate(ipmi_entity_t       *ent,
     int            rv = 0;
     ipmi_timeout_t time = 0;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (!ent->hot_swap_power)
 	rv = ENOSYS;
     else
 	time = ent->hot_swap_deact_timeout;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     if ((!rv) && (handler))
 	handler(ent, 0, time, cb_data);
@@ -6390,13 +6428,13 @@ e_get_hot_swap_indicator(ipmi_entity_t      *ent,
     int                 rv;
     ipmi_control_id_t   id;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (! ent->hot_swap_indicator) {
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
 	return ENOSYS;
     }
     id = ent->hot_swap_indicator_id;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -6438,13 +6476,13 @@ e_set_hot_swap_indicator(ipmi_entity_t  *ent,
     int                     rv;
     ipmi_control_id_t       id;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (! ent->hot_swap_indicator) {
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
 	return ENOSYS;
     }
     id = ent->hot_swap_indicator_id;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -6469,13 +6507,13 @@ got_hot_swap_req(ipmi_sensor_t *sensor,
     int                 val = 0;
 
     if (!err) {
-	ipmi_lock(info->ent->lock);
+	ent_lock(info->ent);
 	if (ipmi_is_state_set(states, info->ent->hot_swap_offset)
 	    == info->ent->hot_swap_requesting_val)
 	{
 	    val = 1;
 	}
-	ipmi_unlock(info->ent->lock);
+	ent_unlock(info->ent);
     }
     info->handler(info->ent, err, val, info->cb_data);
     ipmi_mem_free(info);
@@ -6490,13 +6528,13 @@ e_get_hot_swap_requester(ipmi_entity_t      *ent,
     int                 rv;
     ipmi_sensor_id_t    id;
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (! ent->hot_swap_requester) {
-	ipmi_unlock(ent->lock);
+	ent_unlock(ent);
 	return ENOSYS;
     }
     id = ent->hot_swap_requester_id;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -6534,7 +6572,7 @@ check_requester(ipmi_sensor_t *sensor,
 	goto out;
     }
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ipmi_is_state_set(states, ent->hot_swap_offset)
 	== ent->hot_swap_requesting_val)
     {
@@ -6551,7 +6589,7 @@ check_requester(ipmi_sensor_t *sensor,
 	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
 			       NULL);
     }
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
 
  out:
     ipmi_mem_free(info);
@@ -6578,11 +6616,11 @@ check_power(ipmi_control_t *control,
 
     info->power = val[0];
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->hot_swap_requester) {
-	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
-			               check_requester,
-			               info);
+	ipmi_sensor_id_t hsr = ent->hot_swap_requester_id;
+	ent_unlock(ent);
+	rv = ipmi_sensor_id_get_states(hsr, check_requester, info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sentity.c(check_power): Unable to"
@@ -6595,9 +6633,9 @@ check_power(ipmi_control_t *control,
 	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
 	else
 	    set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
+	ent_unlock(ent);
 	ipmi_mem_free(info);
     }
-    ipmi_unlock(ent->lock);
 }
 
 static int
@@ -6613,19 +6651,22 @@ e_check_hot_swap_state(ipmi_entity_t *ent)
     info->entity = ent;
     info->power = 1; /* Assume power is on if no power control. */
 
-    ipmi_lock(ent->lock);
-    if (ent->hot_swap_power)
-	rv = ipmi_control_id_get_val(ent->hot_swap_power_id, check_power,
-				     info);
-    else if (ent->hot_swap_requester)
-	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
-				       check_requester, info);
-    else
+    ent_lock(ent);
+    if (ent->hot_swap_power) {
+	ipmi_control_id_t hsp = ent->hot_swap_power_id;
+	ent_unlock(ent);
+	rv = ipmi_control_id_get_val(hsp, check_power, info);
+    } else if (ent->hot_swap_requester) {
+	ipmi_sensor_id_t hsr = ent->hot_swap_requester_id;
+	ent_unlock(ent);
+	rv = ipmi_sensor_id_get_states(hsr, check_requester, info);
+    } else {
+	ent_unlock(ent);
 	ipmi_mem_free(info);
+    }
 	
     if (info && rv)
 	ipmi_mem_free(info);
-    ipmi_unlock(ent->lock);
 
     return rv;
 }
@@ -6938,10 +6979,10 @@ ipmi_entity_set_presence_handler(ipmi_entity_t              *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     ent->cruft_presence_handler = handler;
     ent->cruft_presence_cb_data = cb_data;
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return 0;
 }
 
@@ -6954,7 +6995,7 @@ ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->cruft_sensor_handler)
 	ipmi_entity_remove_sensor_update_handler
 	    (ent,
@@ -6965,7 +7006,7 @@ ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
     ent->cruft_sensor_cb_data = cb_data;
     if (handler)
 	rv = ipmi_entity_add_sensor_update_handler(ent, handler, cb_data);
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return rv;
 }
 
@@ -6978,7 +7019,7 @@ ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->cruft_control_handler)
 	ipmi_entity_remove_control_update_handler
 	    (ent,
@@ -6989,7 +7030,7 @@ ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
     ent->cruft_control_cb_data = cb_data;
     if (handler)
 	rv = ipmi_entity_add_control_update_handler(ent, handler, cb_data);
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return rv;
 }
 
@@ -7002,7 +7043,7 @@ ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    ipmi_lock(ent->lock);
+    ent_lock(ent);
     if (ent->cruft_fru_handler)
 	ipmi_entity_remove_fru_update_handler
 	    (ent,
@@ -7013,7 +7054,7 @@ ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
     ent->cruft_fru_cb_data = cb_data;
     if (handler)
 	rv = ipmi_entity_add_fru_update_handler(ent, handler, cb_data);
-    ipmi_unlock(ent->lock);
+    ent_unlock(ent);
     return rv;
 }
 
