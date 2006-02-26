@@ -1962,7 +1962,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	/* MC data is still valid, but the MC is not good any more.
 	   We saved it in rsp_data. */
         mc = cb_data;
-	_ipmi_mc_startup_put(mc, "sensors_reread");
+	_ipmi_mc_startup_put(mc, "sensors_reread(3)");
 	return; /* domain went away while processing. */
     }
 
@@ -1986,10 +1986,13 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	mc->sdrs_first_read_handler = NULL;
     }
 
-    if (mc->devid.SEL_device_support && ipmi_option_SEL(mc->domain))
+    if (mc->devid.SEL_device_support && ipmi_option_SEL(mc->domain)) {
+	int rv;
 	/* If the MC supports an SEL, start scanning its SEL. */
-	start_sel_ops(mc, 0, mc_first_sels_read, mc);
-    else
+	rv = start_sel_ops(mc, 0, mc_first_sels_read, mc);
+	if (rv)
+	    _ipmi_mc_startup_put(mc, "sensors_reread(2)");
+    } else
 	_ipmi_mc_startup_put(mc, "sensors_reread");
 }
 
@@ -2039,6 +2042,7 @@ mc_startup(ipmi_mc_t *mc)
 		     "%smc.c(ipmi_mc_setup_new): "
 		     "Unable to create chassis controls.",
 		     mc->name);
+	    _ipmi_mc_startup_put(mc, "mc_startup(2)");
 	    return;
 	}
     }

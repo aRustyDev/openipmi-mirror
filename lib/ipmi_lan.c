@@ -1137,8 +1137,12 @@ handle_msg_send(lan_timer_info_t      *info,
     {
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 
-	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS)
-	    return EINVAL;
+	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS) {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    ipmi_mem_free(info);
+	    rv = EINVAL;
+	    goto out;
+	}
 
 	if (ipmb->slave_addr == lan->slave_addr[ipmb->channel]) {
 	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
@@ -1819,6 +1823,7 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
 
     /* Put it in the list first. */
     info->ipmi = ipmi;
@@ -1827,7 +1832,6 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
     rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(info->timer));
     if (rv) {
 	ipmi_mem_free(info);
-	ipmi_mem_free(rspi);
 	return rv;
     }
 
@@ -1845,12 +1849,15 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
     info = NULL;
     if (! rv)
 	lan->outstanding_msg_count++;
+    ipmi_unlock(lan->seq_num_lock);
+    return rv;
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
     if (rv) {
 	if (info) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    if (info->timer)
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
 	    ipmi_mem_free(info);
 	}
     }
@@ -1890,16 +1897,15 @@ lan_send_command(ipmi_con_t            *ipmi,
 	rv = ENOMEM;
 	goto out_unlock2;
     }
+    memset(info, 0, sizeof(*info));
 
     /* Put it in the list first. */
     info->ipmi = ipmi;
     info->cancelled = 0;
 
     rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(info->timer));
-    if (rv) {
-	ipmi_mem_free(info);
-	return rv;
-    }
+    if (rv)
+	goto out_unlock;
 
     ipmi_lock(lan->seq_num_lock);
 
@@ -1940,12 +1946,17 @@ lan_send_command(ipmi_con_t            *ipmi,
     info = NULL;
     if (!rv)
 	lan->outstanding_msg_count++;
+    else if (!trspi && rspi)
+	ipmi_mem_free(rspi);
+    ipmi_unlock(lan->seq_num_lock);
+    return rv;
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
     if (rv) {
 	if (info) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    if (info->timer)
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
 	    ipmi_mem_free(info);
 	}
     }
@@ -2107,9 +2118,6 @@ lan_cleanup(ipmi_con_t *ipmi)
     for (i=0; i<lan->num_ip_addr; i++)
 	send_close_session(ipmi, lan, i);
 
-    if (lan->close_done)
-	lan->close_done(ipmi, lan->close_cb_data);
-
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {
 	if (lan->seq_table[i].inuse) {
@@ -2189,6 +2197,9 @@ lan_cleanup(ipmi_con_t *ipmi)
 	}
     }
     ipmi_unlock(lan->seq_num_lock);
+
+    if (lan->close_done)
+	lan->close_done(ipmi, lan->close_cb_data);
 
     evt_to_free = lan->event_handlers;
     lan->event_handlers = NULL;
