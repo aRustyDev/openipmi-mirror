@@ -1660,6 +1660,10 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	mc->startup_SEL_time = 0;
     }
 
+    if (!mc->sel_timer_info)
+	/* timer info is gone, just give up. */
+	return;
+
     rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
     if (rv) {
 	sels_fetched_start_timer(mc->sel,
@@ -2157,6 +2161,7 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	    mc->state = MC_INACTIVE;
 	    mc->active = 0;
 	    ipmi_unlock(mc->lock);
+	    _ipmi_domain_mc_unlock(mc->domain);
 	    mc_cleanup(mc);
 	    call_active_handlers(mc);
 	    _ipmi_domain_mc_lock(mc->domain);
@@ -2697,7 +2702,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
     info->sdrs = sdrs;
     rv = ipmi_mc_pointer_cb(info->source_mc, sdrs_fetched_mc_cb, info);
     if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 1);
+	sdr_reread_done(info, NULL, ECANCELED, 0);
 }
 
 static void
@@ -2727,7 +2732,7 @@ sensor_read_handler(void *cb_data, int shutdown)
 
     rv = ipmi_mc_pointer_cb(info->source_mc, sensor_read_mc_cb, info);
     if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 1);
+	sdr_reread_done(info, NULL, ECANCELED, 0);
     return OPQ_HANDLER_STARTED;
 }
 
