@@ -1666,6 +1666,10 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 
     rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
     if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(startup_set_sel_time): "
+		 "Unable to start an SEL get due to error: %x",
+		 mc->name, rsp->data[0]);
 	sels_fetched_start_timer(mc->sel,
 				 rv,
 				 0,
@@ -1704,6 +1708,7 @@ first_sel_op(ipmi_mc_t *mc)
 		 mc->name);
 	goto cont_op;
     }
+    strncpy(info->name, mc->name, sizeof(info->name));
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1720,6 +1725,10 @@ first_sel_op(ipmi_mc_t *mc)
     rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
 		      mc->sel_timer_info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(first_sel_op): "
+		 "Unable to start SEL get due to error: %x",
+		 mc->name, rv);
 	sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
 	if (mc->sels_first_read_handler) {
 	    mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
@@ -1736,6 +1745,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     mc_name_info_t *info = rsp_data;
     struct timeval now;
     uint32_t       time;
+    int            rv;
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -1776,7 +1786,15 @@ startup_got_sel_time(ipmi_mc_t  *mc,
         tv.tv_usec = 0;
         mc->startup_SEL_time = ipmi_timeval_to_time(tv);
 
-	ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
+			  mc->sel_timer_info);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%smc.c(startup_got_sel_time): "
+		     "Unable to start SEL fetch due to error 0x%x",
+		     mc->name, rv);
+	    goto out_start;
+	}
     }
 
     goto out;
@@ -1810,6 +1828,7 @@ con_up_mc(ipmi_mc_t *mc, void *cb_data)
 		 mc->name);
 	goto cont_op;
     }
+    strncpy(info->name, mc->name, sizeof(info->name));
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_got_sel_time, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1855,6 +1874,9 @@ start_sel_ops(ipmi_mc_t           *mc,
     int             rv;
     os_handler_t    *os_hnd = mc_get_os_hnd(mc);
 
+    if (mc->sel_timer_info)
+	return EBUSY; /* Already configured. */
+
     /* Allocate the system event log fetch timer. */
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
@@ -1891,6 +1913,8 @@ start_sel_ops(ipmi_mc_t           *mc,
 	rv = EAGAIN;
 	ipmi_mem_free(info);
 	mc->sel_timer_info = NULL;
+	os_hnd->free_timer(os_hnd, mc->sel_timer);
+	mc->sel_timer = NULL;
 	goto sel_failure;
     } else {
 	/* The domain is not up yet, wait for it to come up then start
