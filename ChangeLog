@@ -12,6 +12,12 @@
 
 	* lib/sdr.c: Added some trace debugging stuff.
 
+	* lib/mc.c: Don't start operations unless the MC is in the proper
+	state.
+	
+	* lib/entity.c: Make sure only one presence check is running at a
+	time.
+
 2006-02-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/chassis.c: Make sure to remove the active handler from the
