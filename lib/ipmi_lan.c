@@ -1313,6 +1313,10 @@ data_handler(int            fd,
     ipmi_ll_rsp_handler_t handler;
     ipmi_msgi_t           *rspi;
 
+    int                (*handle_send_rsp)(ipmi_con_t *con, ipmi_msg_t *msg);
+
+    handle_send_rsp = NULL;
+
     if (!lan_valid_ipmi(ipmi))
 	/* We can have due to a race condition, just return and
            everything should be fine. */
@@ -1547,10 +1551,8 @@ data_handler(int            fd,
 	    msg.cmd = lan->seq_table[seq].msg.cmd;
 	    msg.data = tmsg + 6;
 	    msg.data_len = 1;
-	    if (ipmi->handle_send_rsp_err) {
-		if (ipmi->handle_send_rsp_err(ipmi, &msg))
-		    goto out;
-	    }
+	    handle_send_rsp = ipmi->handle_send_rsp_err;
+	    /* NOTE! Don't let msg be changed after this. */
 	} else {
 	    ipmi_msg_t *orig_msg;
 
@@ -1790,6 +1792,11 @@ data_handler(int            fd,
 	    dump_hex(msg.data, msg.data_len);
 	}
         ipmi_log(IPMI_LOG_DEBUG_END, " ");
+    }
+
+    if (handle_send_rsp) {
+	handle_send_rsp(ipmi, &msg);
+	goto out;
     }
 
     ipmi_handle_rsp_item_copyall(ipmi, rspi, &addr, addr_len, &msg, handler);
