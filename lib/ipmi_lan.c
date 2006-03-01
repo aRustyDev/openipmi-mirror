@@ -1751,6 +1751,15 @@ data_handler(int            fd,
     ip_num = lan->seq_table[seq].last_ip_num;
     lan->consecutive_ip_failures[ip_num] = 0;
 
+    if (handle_send_rsp) {
+	/* We just got a send response that needs to be handled.
+	   Deliver that, but there's no main message yet so we just do
+	   the send response and return. */
+	ipmi_unlock(lan->seq_num_lock);
+	handle_send_rsp(ipmi, &msg);
+	goto out;
+    }
+
     /* The command matches up, cancel the timer and deliver it */
     rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
     if (rv)
@@ -1792,11 +1801,6 @@ data_handler(int            fd,
 	    dump_hex(msg.data, msg.data_len);
 	}
         ipmi_log(IPMI_LOG_DEBUG_END, " ");
-    }
-
-    if (handle_send_rsp) {
-	handle_send_rsp(ipmi, &msg);
-	goto out;
     }
 
     ipmi_handle_rsp_item_copyall(ipmi, rspi, &addr, addr_len, &msg, handler);

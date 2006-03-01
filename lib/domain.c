@@ -1921,7 +1921,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     rspi = ipmi_mem_alloc(sizeof(*rspi));
     if (!rspi) {
 	rv = ENOMEM;
-	goto out;
+	goto out_unlock;
     }
 
     rspi->data1 = domain;
