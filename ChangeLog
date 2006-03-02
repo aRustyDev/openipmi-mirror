@@ -18,6 +18,8 @@
 	* lib/entity.c: Make sure only one presence check is running at a
 	time.
 
+	* configure.in: Move to 1.4.26.
+
 2006-02-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/chassis.c: Make sure to remove the active handler from the
