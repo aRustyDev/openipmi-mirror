@@ -35,14 +35,19 @@
 #define __IPMI_SMI_H
 
 #include <OpenIPMI/ipmi_mc.h>
+
+#ifdef WINDOWS
+#include <windows.h>
+#else
 #include <netinet/in.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Create a connection to a system-management interface on the current
- * computer.  The parameters are: 
+ * computer.  The parameters are:
  *
  *  if_num - The interface number of the BMC.
  *  handlers - The set of OS handlers to use for this connection.
