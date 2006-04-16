@@ -37,12 +37,7 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_addr.h>
 #include <OpenIPMI/ipmi_conn.h>
-
-#ifdef WINDOWS
-#include <windows.h>
-#else
-#include <netinet/in.h>
-#endif
+#include <NetworkSupport.h>
 
 #ifdef __cplusplus
 extern "C" {

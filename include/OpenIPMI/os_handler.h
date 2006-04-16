@@ -59,7 +59,7 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include <OpenIPMI/ipmi_log.h>
-
+#include <OS_Port.h>
 /************************************************************************
  * WARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNING
  *
@@ -200,11 +200,11 @@ struct os_handler_s
        See the log types defined in ipmiif.h for more information on
        handling these. */
     void (*log)(os_handler_t         *handler,
-		enum ipmi_log_type_e log_type, 
+		enum ipmi_log_type_e log_type,
 		const char           *format,
 		...);
     void (*vlog)(os_handler_t         *handler,
-		 enum ipmi_log_type_e log_type, 
+		 enum ipmi_log_type_e log_type,
 		 const char           *format,
 		 va_list              ap);
 
