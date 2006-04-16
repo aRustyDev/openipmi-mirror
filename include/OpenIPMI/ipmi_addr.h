@@ -57,7 +57,7 @@
 #define __IPMI_ADDR_H
 
 /* To get a socket. */
-#include <NetworkSupport.h>
+#include "NetworkSupport.h"
 
 #ifdef __cplusplus
 extern "C" {

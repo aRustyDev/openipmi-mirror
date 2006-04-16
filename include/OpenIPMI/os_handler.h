@@ -59,7 +59,7 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include <OpenIPMI/ipmi_log.h>
-#include <OS_Port.h>
+#include "OS_Port.h"
 /************************************************************************
  * WARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNING
  *

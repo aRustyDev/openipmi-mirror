@@ -35,7 +35,7 @@
 #define __IPMI_SMI_H
 
 #include <OpenIPMI/ipmi_mc.h>
-#include <NetworkSupport.h>
+#include "NetworkSupport.h"
 
 #ifdef __cplusplus
 extern "C" {
