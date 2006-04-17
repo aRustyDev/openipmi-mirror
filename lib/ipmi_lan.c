@@ -34,18 +34,18 @@
 #include <config.h>
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <sys/stat.h>
+#ifndef WINDOWS
 #include <sys/poll.h>
+#endif
 #include <sys/time.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <netdb.h>
 
+#include <OpenIPMI/NetworkSupport.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_auth.h>
@@ -128,15 +128,18 @@ typedef struct lan_wait_queue_s
 
 /* Because sizeof(sockaddr_in6) > sizeof(sockaddr_in), this structure
  * is used as a replacement of struct sockaddr. */
-typedef struct sockaddr_ip_s {
+
+#undef PF_INET6                 // PGK todo, fix this
+typedef struct sockaddr_ip_s
+{
     union
-        {
-	    struct sockaddr	s_addr;
-            struct sockaddr_in  s_addr4;
+    {
+	    struct sockaddr	s_address;
+        struct sockaddr_in  s_addr4;
 #ifdef PF_INET6
-            struct sockaddr_in6 s_addr6;
+        struct sockaddr_in6 s_addr6;
 #endif
-        } s_ipsock;
+    } s_ipsock;
 } sockaddr_ip_t;
 
 struct ipmi_rmcpp_auth_s
@@ -350,7 +353,7 @@ struct lan_data_s
 	unsigned int          inuse : 1;
 	ipmi_addr_t           addr;
 	unsigned int          addr_len;
-	
+
 	ipmi_msg_t            msg;
 	unsigned char         data[LAN_MAX_RAW_MSG];
 	ipmi_ll_rsp_handler_t rsp_handler;
@@ -605,7 +608,7 @@ ipmi_rmcpp_register_authentication(unsigned int                auth_num,
 	return EINVAL;
     if (auths[auth_num] && auth)
 	return EAGAIN;
-    
+
     auths[auth_num] = auth;
     return 0;
 }
@@ -698,7 +701,7 @@ int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
 	return EINVAL;
     if (confs[conf_num] && conf)
 	return EAGAIN;
-    
+
     confs[conf_num] = conf;
     return 0;
 }
@@ -806,7 +809,7 @@ int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
 	return EINVAL;
     if (integs[integ_num] && integ)
 	return EAGAIN;
-    
+
     integs[integ_num] = integ;
     return 0;
 }
@@ -1101,15 +1104,15 @@ static void data_handler(int            fd,
 static int
 lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 {
-    if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
+    if (a1->s_ipsock.s_address.sa_family != a2->s_ipsock.s_address.sa_family) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
-		     a1->s_ipsock.s_addr.sa_family,
-		     a2->s_ipsock.s_addr.sa_family);
+		     a1->s_ipsock.s_address.sa_family,
+		     a2->s_ipsock.s_address.sa_family);
 	return 0;
     }
 
-    switch (a1->s_ipsock.s_addr.sa_family) {
+    switch (a1->s_ipsock.s_address.sa_family) {
     case PF_INET:
 	{
 	    struct sockaddr_in *ip1 = &a1->s_ipsock.s_addr4;
@@ -1136,7 +1139,7 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
     default:
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan: Unknown protocol family: 0x%x",
-		 a1->s_ipsock.s_addr.sa_family);
+		 a1->s_ipsock.s_address.sa_family);
 	break;
     }
 
@@ -1277,7 +1280,13 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	/* Bind is not necessary, we don't care what port we are. */
 
 	/* We want it to be non-blocking. */
+#ifdef WINDOWS // PGK 4/16/06 - Windows does not have fcntl
+   int flags;
+   flags = 0; // nonblock
+   rv = ioctlsocket(socket, FIONBIO, &flags);
+ #else
 	rv = fcntl(item->fd, F_SETFL, O_NONBLOCK);
+#endif
 	if (rv) {
 	    close(item->fd);
 	    item->next = *free_list;
@@ -1288,7 +1297,7 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 
 	rv = lan_os_hnd->add_fd_to_wait_for(lan_os_hnd,
 					    item->fd,
-					    data_handler, 
+					    data_handler,
 					    item,
 					    NULL,
 					    &(item->fd_wait_id));
@@ -1400,7 +1409,7 @@ lan_add_con(lan_data_t *lan)
     head->prev = &lan->link;
 
     for (i=0; i<lan->cparm.num_ip_addr; i++) {
-	struct sockaddr *addr = &lan->cparm.ip_addr[i].s_ipsock.s_addr;
+	struct sockaddr *addr = &lan->cparm.ip_addr[i].s_ipsock.s_address;
 
 	idx = hash_lan_addr(addr);
 
@@ -1458,13 +1467,13 @@ cmp_timeval(struct timeval *tv1, struct timeval *tv2)
 {
     if (tv1->tv_sec < tv2->tv_sec)
         return -1;
- 
+
     if (tv1->tv_sec > tv2->tv_sec)
         return 1;
 
     if (tv1->tv_usec < tv2->tv_usec)
-        return -1; 
-   
+        return -1;
+
     if (tv1->tv_usec > tv2->tv_usec)
         return 1;
 
@@ -2109,7 +2118,7 @@ audit_timeout_handler(void              *cb_data,
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     msg.data = NULL;
     msg.data_len = 0;
-		
+
     /* Send a message to check the working of the interface. */
     if (ipmi->get_ipmb_addr) {
 	/* If we have a way to query the IPMB address, do so
@@ -2232,7 +2241,7 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 	ipmi_unlock(lan->con_change_lock);
     } else {
 	ipmi_unlock(lan->ip_lock);
-    }    
+    }
 }
 
 static void
@@ -2309,7 +2318,7 @@ lost_connection(lan_data_t *lan, unsigned int addr_num)
 
     {
 	int connected = lan->connected;
-	
+
 	ipmi_lock(lan->con_change_lock);
 	ipmi_unlock(lan->ip_lock);
 	call_con_change_handlers(lan, ETIMEDOUT, addr_num, connected);
@@ -2359,7 +2368,7 @@ rsp_timeout_handler(void              *cb_data,
 		 "%sSeq #%d\n"
 		 "  addr_type=%d, ip_num=%d, fails=%d\n"
 		 "  fail_start_time=%ld.%6.6ld",
-		 IPMI_CONN_NAME(ipmi), 
+		 IPMI_CONN_NAME(ipmi),
 		 seq, lan->seq_table[seq].addr.addr_type,
 		 lan->seq_table[seq].last_ip_num,
 		 lan->ip[ip_num].consecutive_failures,
@@ -2773,7 +2782,7 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 		     "%sipmi_lan.c(check_command_queue): "
 		     "Command was not able to be sent due to error 0x%x",
 		     IPMI_CONN_NAME(ipmi), rv);
-	    
+
 	    q_item->msg.netfn |= 1; /* Convert it to a response. */
 	    q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
 	    q_item->msg.data_len = 1;
@@ -2959,7 +2968,7 @@ handle_payload(ipmi_con_t    *ipmi,
 
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
-    
+
     if (handle_send_rsp)
 	handle_send_rsp(ipmi, &rspi->msg);
 
@@ -3150,7 +3159,7 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     }
 
     handle_payload(ipmi, lan, addr_num, payload_type, tmsg, payload_len);
-    
+
  out:
     return;
 }
@@ -3426,7 +3435,7 @@ data_handler(int            fd,
     int                addr_num;
 
     from_len = sizeof(ipaddrd);
-    len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
+    len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd,
 		   &from_len);
 
     if (len < 0)
@@ -3479,7 +3488,7 @@ data_handler(int            fd,
     } else {
 	handle_lan15_recv(ipmi, lan, addr_num, data, len);
     }
-    
+
     lan_put(ipmi);
     return;
 }
@@ -3918,7 +3927,7 @@ lan_cleanup(ipmi_con_t *ipmi)
                longer valid and thus nothing else can really happen on
                this connection.  Sends will fail and receives will not
                validate. */
-	    
+
 	    ipmi_handle_rsp_item(NULL, rspi, handler);
 
 	    ipmi_lock(lan->seq_num_lock);
@@ -4854,7 +4863,7 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 		"%sipmi_lan.c(auth_cap_done): "
 		"BMC confused about RMCP+ support. Disabling RMCP+.",
 		IPMI_CONN_NAME(lan->ipmi));
-    } 
+    }
     if (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
 	/* The user specified RMCP+, but the system doesn't have it. */
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -5125,8 +5134,8 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 	paddrs[i] = s_ip_addrs[i];
 	pports[i]= s_ports[i];
     }
-    rv = ipmi_ip_setup_con(paddrs, 
-			   pports, 
+    rv = ipmi_ip_setup_con(paddrs,
+			   pports,
 			   num_ip_addrs,
 			   authtype,
 			   privilege,
@@ -5183,7 +5192,7 @@ find_matching_lan(lan_conn_parms_t *cparm)
     int        idx;
 
     /* Look in the first IP addresses list. */
-    idx = hash_lan_addr(&cparm->ip_addr[0].s_ipsock.s_addr);
+    idx = hash_lan_addr(&cparm->ip_addr[0].s_ipsock.s_address);
     ipmi_lock(lan_list_lock);
     l = lan_ip_list[idx].next;
     while (l->lan) {
@@ -5411,7 +5420,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 #ifdef HAVE_GETADDRINFO
     for (i=0; i<cparm.num_ip_addr; i++) {
         struct addrinfo hints, *res0;
- 
+
         memset(&hints, 0, sizeof(hints));
         if (count == 0)
             hints.ai_family = PF_UNSPEC;
@@ -5642,7 +5651,7 @@ ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
     while (l->lan) {
 	lan = NULL;
 	for (i=0; i<l->lan->cparm.num_ip_addr; i++) {
-	    if (l->lan->cparm.ip_addr[i].s_ipsock.s_addr.sa_family
+	    if (l->lan->cparm.ip_addr[i].s_ipsock.s_address.sa_family
 		!= src_addr->sa_family)
 	    {
 		continue;
@@ -6356,7 +6365,7 @@ lan_args_copy(ipmi_args_t *args)
     nlargs->str_port[1] = ipmi_strdup(largs->str_port[1]);
     if (! nlargs->str_port[1])
 	goto out_err;
-    
+
     return nargs;
 
  out_err:
