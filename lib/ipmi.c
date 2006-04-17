@@ -36,8 +36,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <netdb.h>
-
+#include <OpenIPMI/NetworkSupport.h>
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -75,7 +74,7 @@ ipmi_get_global_os_handler(void)
 {
     return ipmi_os_handler;
 }
-    
+
 int
 ipmi_create_global_lock(ipmi_lock_t **new_lock)
 {
@@ -169,13 +168,13 @@ ipmi_get_6_bit_ascii(unsigned int len,
 {
     static char table[64] = {
 	' ', '!', '"', '#', '$', '%', '&', '\'',
-	'(', ')', '*', '+', ',', '-', '.', '/', 
+	'(', ')', '*', '+', ',', '-', '.', '/',
 	'0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', ':', ';', '<', '=', '>', '?',
 	'&', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
-	'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 
+	'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
 	'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
-	'X', 'Y', 'Z', '[', '\\', ']', '^', '_' 
+	'X', 'Y', 'Z', '[', '\\', ']', '^', '_'
     };
     unsigned int pos;
     unsigned int bo;
@@ -232,7 +231,7 @@ ipmi_get_8_bit_ascii(unsigned int len,
 		     char *out, unsigned int out_len)
 {
     unsigned int j;
-    
+
     if (len > in_len)
 	return -1;
     if (len > out_len)
@@ -455,7 +454,7 @@ ipmi_set_6_bit_ascii(const char    *input,
 	switch(bit) {
 	case 0:
 	    pos++;
-	    if (pos >= len) 
+	    if (pos >= len)
 		goto out_overflow;
 	    output[pos] = oval;
 	    bit = 6;
@@ -469,7 +468,7 @@ ipmi_set_6_bit_ascii(const char    *input,
 	case 4:
 	    output[pos] |= oval << 4;
 	    pos++;
-	    if (pos >= len) 
+	    if (pos >= len)
 		goto out_overflow;
 	    output[pos] = (oval >> 4) & 0x3;
 	    bit = 2;
@@ -478,7 +477,7 @@ ipmi_set_6_bit_ascii(const char    *input,
 	case 6:
 	    output[pos] |= oval << 6;
 	    pos++;
-	    if (pos >= len) 
+	    if (pos >= len)
 		goto out_overflow;
 	    output[pos] = (oval >> 2) & 0xf;
 	    bit = 4;

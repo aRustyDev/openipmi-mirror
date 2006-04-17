@@ -36,13 +36,12 @@
    connections. */
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 
+#include <OpenIPMI/NetworkSupport.h>
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_pet.h>
@@ -178,7 +177,7 @@ internal_pet_destroy(ipmi_pet_t *pet)
 	    pet->refcount++;
 	    pet->in_list = 0;
 	    pet_unlock(pet);
-	
+
 	    pets = ipmi_domain_attr_get_data(attr);
 
 	    locked_list_remove(pets, pet, NULL);

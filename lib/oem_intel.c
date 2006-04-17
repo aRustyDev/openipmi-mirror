@@ -30,8 +30,9 @@
  *  License along with this program; if not, write to the Free
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
+#ifndef WINDOWS
 #include <alloca.h>
+#endif
 #include <string.h>
 #include <stdlib.h>
 
@@ -130,7 +131,7 @@ alarm_set_start(ipmi_control_t *control, int err, void *cb_data)
 	return;
     }
 
-    if (ipmi_mc_manufacturer_id(mc) == NSC_MANUFACTURER_ID)  
+    if (ipmi_mc_manufacturer_id(mc) == NSC_MANUFACTURER_ID)
 	 busid = 0x24;  /* PERIPHERAL_BUS_ID */
     else busid = 0x03;  /* PRIVATE_BUS_ID */
 
@@ -245,7 +246,7 @@ alarm_get_start(ipmi_control_t *control, int err, void *cb_data)
 	return;
     }
 
-    if (ipmi_mc_manufacturer_id(mc) == NSC_MANUFACTURER_ID)  
+    if (ipmi_mc_manufacturer_id(mc) == NSC_MANUFACTURER_ID)
 	 busid = 0x24;  /* PERIPHERAL_BUS_ID */
     else busid = 0x03;  /* PRIVATE_BUS_ID */
 
@@ -415,7 +416,7 @@ tig_handler(ipmi_mc_t *mc,
     unsigned int     addr    = ipmi_mc_get_address(mc);
     intel_tig_info_t *info;
     int              rv;
-    
+
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* It's the SI MC, which we detect at startup.  Set up the MCs
 	   for the domain to scan. */
@@ -494,7 +495,7 @@ noipmb_handler(ipmi_mc_t *mc,
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
     unsigned int  channel = ipmi_mc_get_channel(mc);
     unsigned int  addr    = ipmi_mc_get_address(mc);
-    
+
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* We only scan 0x20. */
 	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x00, 0x1f);

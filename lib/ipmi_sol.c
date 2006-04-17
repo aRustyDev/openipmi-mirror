@@ -38,17 +38,19 @@
  *	- Multiple connections at once: should work, but UNTESTED.
  */
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+//#include <sys/socket.h>
+//#include <netinet/in.h>
 #include <sys/stat.h>
+#ifndef WINDOWS
 #include <sys/poll.h>
+#endif
 #include <sys/time.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <netdb.h>
+//#include <netdb.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -59,6 +61,7 @@
 #include <OpenIPMI/internal/locked_list.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/ipmi_sol.h>
+#include <OpenIPMI/NetworkSupport.h>
 
 /* FIXME - after processing waiting packets, a transmitter prod may be
    necessary in some cases.  Figure out where. */
@@ -157,7 +160,7 @@ struct ipmi_sol_outgoing_queue_item_s {
     /* The in-band (sequential) operation.  Should only contain
        IPMI_SOL_GENERATE_BREAK for now. */
     unsigned char ib_op;
-	
+
     /* The callback to call when the data (or BREAK) have been ACKed
        or sent. */
     ipmi_sol_transmit_complete_cb transmit_complete_callback;
