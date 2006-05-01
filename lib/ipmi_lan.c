@@ -35,7 +35,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifndef WINDOWS
+#ifndef __MINGW32__
 #include <sys/poll.h>
 #endif
 #include <sys/time.h>
@@ -129,7 +129,6 @@ typedef struct lan_wait_queue_s
 /* Because sizeof(sockaddr_in6) > sizeof(sockaddr_in), this structure
  * is used as a replacement of struct sockaddr. */
 
-#undef PF_INET6                 // PGK todo, fix this
 typedef struct sockaddr_ip_s
 {
     union
@@ -1130,7 +1129,7 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 	    struct sockaddr_in6 *ip1 = &a1->s_ipsock.s_addr6;
 	    struct sockaddr_in6 *ip2 = &a2->s_ipsock.s_addr6;
 	    if ((ip1->sin6_port == ip2->sin6_port)
-		&& (bcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
+		&& (memcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr, // PGK 4/17/06 changed bcmp to memcmp
 			 sizeof(struct in6_addr)) == 0))
 		return 1;
 	}
@@ -1280,11 +1279,11 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	/* Bind is not necessary, we don't care what port we are. */
 
 	/* We want it to be non-blocking. */
-#ifdef WINDOWS // PGK 4/16/06 - Windows does not have fcntl
-   int flags;
+#ifdef __MINGW32__ // PGK 4/16/06 - Windows does not have fcntl, equivelent functionality is in ioctlsocket
+   u_long flags;
    flags = 0; // nonblock
-   rv = ioctlsocket(socket, FIONBIO, &flags);
- #else
+   rv = ioctlsocket((SOCKET) socket, FIONBIO, &flags);
+#else
 	rv = fcntl(item->fd, F_SETFL, O_NONBLOCK);
 #endif
 	if (rv) {
