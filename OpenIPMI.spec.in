@@ -98,18 +98,12 @@ fi
 %files
 ###################################################
 %defattr(-,root,root)
-%{_libdir}/libOpenIPMIcmdlang.so*
-%{_libdir}/libOpenIPMIcmdlang.la
-%{_libdir}/libOpenIPMIglib.so*
-%{_libdir}/libOpenIPMIglib.la
-%{_libdir}/libOpenIPMIposix.so*
-%{_libdir}/libOpenIPMIposix.la
-%{_libdir}/libOpenIPMIpthread.so*
-%{_libdir}/libOpenIPMIpthread.la
-%{_libdir}/libOpenIPMI.so*
-%{_libdir}/libOpenIPMI.la
-%{_libdir}/libOpenIPMIutils.so*
-%{_libdir}/libOpenIPMIutils.la
+%{_libdir}/libOpenIPMIcmdlang.so.*
+%{_libdir}/libOpenIPMIglib.so.*
+%{_libdir}/libOpenIPMIposix.so.*
+%{_libdir}/libOpenIPMIpthread.so.*
+%{_libdir}/libOpenIPMI.so.*
+%{_libdir}/libOpenIPMIutils.so.*
 %{_bindir}/ipmish
 %doc COPYING COPYING.LIB FAQ INSTALL README README.Force
 %doc README.MotorolaMXP
@@ -133,6 +127,18 @@ fi
 %defattr(-,root,root)
 %{_includedir}/OpenIPMI
 %{_libdir}/*.a
+%{_libdir}/libOpenIPMIcmdlang.la
+%{_libdir}/libOpenIPMIglib.la
+%{_libdir}/libOpenIPMIposix.la
+%{_libdir}/libOpenIPMIpthread.la
+%{_libdir}/libOpenIPMI.la
+%{_libdir}/libOpenIPMIutils.la
+%{_libdir}/libOpenIPMIcmdlang.so
+%{_libdir}/libOpenIPMIglib.so
+%{_libdir}/libOpenIPMIposix.so
+%{_libdir}/libOpenIPMIpthread.so
+%{_libdir}/libOpenIPMI.so
+%{_libdir}/libOpenIPMIutils.so*
 %{_libdir}/pkgconfig
 %doc doc/IPMI.pdf
 
