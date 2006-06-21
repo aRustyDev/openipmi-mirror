@@ -14,4 +14,4 @@ IPMI.dvi: IPMI.ltx ${EPS_FILES}
 	latex IPMI.ltx
 
 %.eps : %.dia
-	dia --export=$@ --export-to-format=eps $<
+	dia --export=$@ --filter=eps $<
