@@ -4,6 +4,9 @@ RPMFLAGS	= -ta
 SUBDIRS    = include utils lib unix $(GLIB_DIR) cmdlang ui lanserv \
 	     sample doc man $(SWIG_DIR)
 
+DIST_SUBDIRS = include utils lib unix glib libedit cmdlang \
+	     ui lanserv sample doc man swig
+
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
 	     OpenIPMI.spec ipmi.init ipmi.sysconf
 
@@ -21,3 +24,7 @@ uninstall-local:
 
 rpm: dist
 	$(RPM) $(RPMFLAGS) $(distdir).tar.gz < /dev/null
+
+DISTCLEANFILES=OpenIPMI.spec OpenIPMIcmdlang.pc OpenIPMI.pc \
+	OpenIPMIglib12.pc OpenIPMIposix.pc OpenIPMIui.pc OpenIPMIglib.pc \
+	OpenIPMIpthread.pc OpenIPMIutils.pc
