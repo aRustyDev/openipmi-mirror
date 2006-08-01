@@ -3221,6 +3221,8 @@ add_sdr_info(entity_sdr_info_t *infos, dlr_info_t *dlr)
 	}
 	if (infos->dlrs) {
 	    memcpy(new_dlrs, infos->dlrs, sizeof(dlr_info_t *) * infos->len);
+	    memcpy(new_found, infos->found,
+		   sizeof(entity_found_t) * infos->len);
 	    ipmi_mem_free(infos->dlrs);
 	    ipmi_mem_free(infos->found);
 	}
@@ -3486,7 +3488,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
 	if (rv)
-	    return rv;
+	    goto out_err;
 
 	memset(&dlr, 0, sizeof(dlr));
 

@@ -1,3 +1,7 @@
+2006-07-31 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Fixed a problem with error handling for bad SDRs.
+
 2006-07-21 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
 
         * lib/oem_kontron_conn.c: Add more board support and fix
