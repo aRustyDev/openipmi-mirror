@@ -9,3 +9,5 @@ pkginclude_HEADERS = \
 	ipmi_debug.h	ipmi_lanparm.h	ipmi_picmg.h	lanserv.h
 
 SUBDIRS = internal
+
+DISTCLEANFILES = ipmiif.h
