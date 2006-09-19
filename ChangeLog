@@ -1,3 +1,8 @@
+2006-09-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Don't set the event receiver in the MC recheck if the
+	user has asked it to not be set.
+		
 2006-08-01 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, doc/Makefile.am: Autodetect the dia version and use
