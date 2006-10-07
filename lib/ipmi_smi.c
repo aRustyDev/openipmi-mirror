@@ -495,17 +495,19 @@ smi_send(smi_data_t        *smi,
 }
 
 static void
-set_ipmb_in_dev(smi_data_t *smi)
+set_ipmb_in_dev(smi_data_t          *smi,
+		const unsigned char ipmb_addr[],
+		unsigned int        num_ipmb_addr)
 {
-    unsigned char                       *slave_addr = smi->slave_addr;
-    unsigned int                        ipmb_addr;
     struct ipmi_channel_lun_address_set channel_addr;
     int                                 rv;
-    int                                 i;
+    unsigned int                        i;
 
-    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+    for (i=0; i<num_ipmb_addr; i++) {
+	if (!ipmb_addr[i])
+	    continue;
 	channel_addr.channel = i;
-	channel_addr.value = slave_addr[i];
+	channel_addr.value = ipmb_addr[i];
 	rv = ioctl(smi->fd, IPMICTL_SET_MY_CHANNEL_ADDRESS_CMD, &channel_addr);
 	if (rv == -1)
 	    goto try_old_version;
@@ -514,8 +516,7 @@ set_ipmb_in_dev(smi_data_t *smi)
 
  try_old_version:
     /* We can only set one address. */
-    ipmb_addr = slave_addr[0];
-    rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &ipmb_addr);
+    rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &ipmb_addr[0]);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sipmi_smi.c(set_ipmb_in_dev): "
@@ -553,7 +554,7 @@ ipmb_handler(ipmi_con_t    *ipmi,
 	    smi->ipmb_addr_handler(ipmi, err, ipmb_addr, num_ipmb_addr,
 				   active, 0, smi->ipmb_addr_cb_data);
 
-	set_ipmb_in_dev(smi);
+	set_ipmb_in_dev(smi, ipmb_addr, num_ipmb_addr);
     }
 }
 
@@ -1193,7 +1194,7 @@ smi_set_ipmb_addr(ipmi_con_t    *ipmi,
 	    smi->ipmb_addr_handler(ipmi, 0, ipmb_addr, num_ipmb_addr,
 				   active, 0, smi->ipmb_addr_cb_data);
 
-	set_ipmb_in_dev(smi);
+	set_ipmb_in_dev(smi, ipmb_addr, num_ipmb_addr);
     }
 }
 
@@ -1257,7 +1258,7 @@ handle_ipmb_addr(ipmi_con_t    *ipmi,
 	smi->ipmb_addr_handler(ipmi, err, ipmb_addr, num_ipmb_addr, active, 0,
 			       smi->ipmb_addr_cb_data);
 
-    set_ipmb_in_dev(smi);
+    set_ipmb_in_dev(smi, ipmb_addr, num_ipmb_addr);
 }
 
 static int
