@@ -1498,6 +1498,7 @@ get_led_capability_2(ipmi_mc_t  *mc,
 		 "%soem_atca.c(get_led_capabilities_2): "
 		 "Could not send FRU LED color capablity command: 0x%x",
 		 MC_NAME(mc), rv);
+	linfo->op_in_progress = 0;
 	/* Just go on, don't shut down the info. */
     }
 }
@@ -1660,13 +1661,12 @@ destroy_fru_leds(atca_fru_t *finfo)
 	    atca_led_t *linfo = finfo->leds[i];
 	    if (!linfo)
 		continue;
-	    if (linfo->op_in_progress) {
+	    if (linfo->control)
+		ipmi_control_destroy(linfo->control);
+	    if (linfo->op_in_progress)
 		linfo->destroyed = 1;
-	    } else {
-		if (linfo->control)
-		    ipmi_control_destroy(linfo->control);
+	    else
 		ipmi_mem_free(linfo);
-	    }
 	}
 	ipmi_mem_free(finfo->leds);
 	finfo->leds = NULL;
