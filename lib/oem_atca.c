@@ -1479,6 +1479,7 @@ get_led_capability_2(ipmi_mc_t  *mc,
     }
 
     if (check_for_msg_err(mc, NULL, rsp, 3, "get_led_capability_2")) {
+	linfo->op_in_progress = 0;
 	return;
     }
 
@@ -1531,6 +1532,7 @@ get_led_capability(ipmi_mc_t *mc, atca_fru_t *finfo, unsigned int num)
 		 "%soem_atca.c(get_led_capability): "
 		 "Could not send FRU LED state command: 0x%x",
 		 MC_NAME(mc), rv);
+	linfo->op_in_progress = 0;
 	/* Just go on, don't shut down the info. */
     }
 }
