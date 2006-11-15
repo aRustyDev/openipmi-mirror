@@ -2,6 +2,8 @@
 
 	* lib/mc.c: Fixed a deadlock in certain error cases.
 
+	* lib/ipmi_lan.c: Fixed a missing shutdown check that could cause
+	a race at shutdown and a possible segv.
 
 2006-11-13 Corey Minyard <cminyard@mvista.com>
 
