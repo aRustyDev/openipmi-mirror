@@ -1696,14 +1696,16 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 				 &tv.tv_sec,
 				 sizeof(tv.tv_sec));
 	/* Wait a random value between 10 and 30 seconds */
+	if (tv.tv_sec < 0)
+	    tv.tv_sec = -tv.tv_sec;
 	tv.tv_sec = (tv.tv_sec % 20) + 10;
 	tv.tv_usec = 0;
+	sdrs->restart_timer_running = 1;
 	sdrs->os_hnd->start_timer(sdrs->os_hnd,
 				  sdrs->restart_timer,
 				  &tv,
 				  restart_timer_cb,
 				  sdrs);
-	sdrs->restart_timer_running = 1;
 	return 0;
     } else {
 	/* Get the SDR repository information first. */

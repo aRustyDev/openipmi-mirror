@@ -1,3 +1,9 @@
+2006-11-15 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain: Fix a problem with active/standby connections; now
+	force command rerouting when a connection goes inactive, as well
+	as when a connection goes active.
+
 2006-11-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fixed a deadlock in certain error cases.
