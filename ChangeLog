@@ -13,8 +13,11 @@
 
 	* swig/OpenIPMI.i: Add the readable method to the sensor object.
 
-	* lib/sensor.c: Fix some problems parsing type 3 SDRs.
+	* lib/sensor.c: Fix some problems parsing type 3 SDRs.  Also added
+	some error logs and cleaned things up a bit.
 	
+	* configure.in: Move to 1.4.28.
+
 2006-11-29 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_types.h: Increase the value of
