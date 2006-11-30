@@ -4,7 +4,7 @@ RPMFLAGS	= -ta
 SUBDIRS    = include utils lib unix $(GLIB_DIR) cmdlang ui lanserv \
 	     sample doc man $(SWIG_DIR)
 
-DIST_SUBDIRS = include utils lib unix glib libedit cmdlang \
+DIST_SUBDIRS = include utils lib unix glib cmdlang \
 	     ui lanserv sample doc man swig
 
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
