@@ -1,5 +1,10 @@
 2006-11-30 Corey Minyard <cminyard@mvista.com>
 
+	* man/ipmicmd.1: Add information about the sequence number in
+	responses.
+
+2006-11-30 Corey Minyard <cminyard@mvista.com>
+
 	* lib/sensor.c, include/OpenIPMI/ipmiif.h.in: Some sensors are not
 	readable, specifically event-only sensors and sensors with system
 	software IDs as the owner.  Add a readable field to the sensor
