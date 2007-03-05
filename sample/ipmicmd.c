@@ -398,6 +398,11 @@ process_input_line(char *buf)
 	return -1;
 
     if (strcmp(v, "help") == 0) {
+	/* Strange that anyone would try this when not in interactive mode,
+	 * but it is possible */
+	if (!interactive)
+		return -1;
+
 	printf("Commands are:\n");
 	printf("  regcmd <netfn> <cmd> - Register to receive this cmd\n");
 	printf("  unregcmd <netfn> <cmd> - Unregister to receive this cmd\n");
@@ -607,7 +612,7 @@ user_input_ready(int fd, void *data)
 	leave(1);
     }
     if (count == 0) {
-	if( interactive)
+	if (interactive)
 	    printf("\n"); 
     	con->close_connection(con);
 	continue_operation = 0;
@@ -622,7 +627,7 @@ user_input_ready(int fd, void *data)
 	    for (j=0; j<count; j++)
 		input_line[j] = input_line[j+pos];
 	    pos = 0;
-	    if( interactive )
+	    if (interactive )
 		printf("=> "); 
 	    fflush(stdout);
 	} else {
@@ -655,7 +660,8 @@ con_changed_handler(ipmi_con_t   *ipmi,
 	}
 	if (!interactive_done) {
 	    interactive_done = 1;
-	    process_input_line(buf);
+	    if (process_input_line(buf))
+		    continue_operation = 0;
 	}
     } else {
 	if (err)

@@ -1,3 +1,8 @@
+2007-03-05 David Greigo <dgriego@mvista.com>
+
+	* sample/ipmicmd.c: Fix problems with handling errors in
+	non-interactive mode.
+
 2007-01-10 Michael Chu <michaelychu@yahoo.com>
 
 	* sdr.c: Fix ipmi_sdr_save related issues: use standard fetch size,
