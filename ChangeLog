@@ -1,3 +1,7 @@
+2006-07-21 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
+
+        * lib/oem_kontron_conn.c: Add more board support.
+		
 2007-03-05 David Greigo <dgriego@mvista.com>
 
 	* sample/ipmicmd.c: Fix problems with handling errors in
