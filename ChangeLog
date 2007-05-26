@@ -2,6 +2,11 @@
 
 	* doc/Makefile.am: Fix some dumb errors.
 
+	* lib/oem_atca.c: Fix a missing prop from 2.0, need to change
+	the way the ATCA detection is done to make it more reliable.
+
+	* configure.in: Move to 1.4.29.
+
 2006-07-21 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
 
         * lib/oem_kontron_conn.c: Add more board support.
