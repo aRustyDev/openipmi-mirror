@@ -5,6 +5,10 @@
 	* lib/oem_atca.c: Fix a missing prop from 2.0, need to change
 	the way the ATCA detection is done to make it more reliable.
 
+	* lib/mc.c: Fix the domain fully up get/put operations to
+	work properly.  Before, the fully up could come early in
+	some situations.
+
 	* configure.in: Move to 1.4.29.
 
 2006-07-21 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
