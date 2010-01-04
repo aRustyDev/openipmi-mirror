@@ -1124,12 +1124,15 @@ smi_close_connection(ipmi_con_t *ipmi)
 static void
 cleanup_con(ipmi_con_t *ipmi)
 {
-    smi_data_t   *smi = (smi_data_t *) ipmi->con_data;
-    os_handler_t *handlers = ipmi->os_hnd;
+    smi_data_t   *smi;
+    os_handler_t *handlers;
 
-    if (ipmi) {
-	ipmi_mem_free(ipmi);
-    }
+    if (!ipmi)
+	return;
+
+    smi = (smi_data_t *) ipmi->con_data;
+    handlers = ipmi->os_hnd;
+    ipmi_mem_free(ipmi);
 
     if (smi) {
 	if (smi->event_handlers_lock)
@@ -1141,7 +1144,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	if (smi->fd != -1)
 	    close(smi->fd);
 	if (smi->fd_wait_id)
-	    handlers->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
+	    handlers->remove_fd_to_wait_for(handlers, smi->fd_wait_id);
 	ipmi_mem_free(smi);
     }
 }
